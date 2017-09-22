@@ -14,3 +14,4 @@ working.dir <- enter the path of your working directory in ""
 # please note that in order to run the model you need the file
 -> blue_whiting_SDM.R
 # which you can get directly from me (amie@aqua.dtu.dk)
+-> store this file in Code/Output/
