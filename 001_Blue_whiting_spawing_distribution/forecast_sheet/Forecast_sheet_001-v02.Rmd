@@ -1,0 +1,161 @@
+---
+title: "Blue Whiting Spawning Habitat Forecast"
+subtitle: "ICES WGS2D Forecast sheet 001-v02 "
+output: html_document
+---
+
+```{r setup, include="FALSE"}
+#Configure Knitr
+knitr::opts_chunk$set(
+  echo=FALSE,
+	error = FALSE,
+	fig.width = 10,
+  fig.align="center",
+	message = FALSE,
+	warning = FALSE,
+	include = TRUE,
+	results = "markup"
+)
+knitr::opts_knit$set(
+  root.dir="..")
+
+```
+
+```{r}
+htmltools::img(src = knitr::image_uri(file.path("..", "WGS2D_logo.png")), 
+               alt = 'logo', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+```
+
+Issued 15-08-2018. Valid through to 01-06-2018.    
+This forecast sheet superceeds the previous version 001-v01, issued 14-06-2017.
+
+***
+
+```{r }
+#  Setup
+#Configure markdown style, do house cleaning
+rm(list = ls(all.names=TRUE));  graphics.off();
+start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
+
+#Helper functions, externals and libraries
+source("src/00.Common_elements.r")
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+#Configuration
+sel.core.percent <- 0.2
+
+```
+
+## Forecast
+Oceanographic conditions have constrained the spawning distribution since 2013 (Figures 1). A constrained distribution can be expected for the 2018 spawning period (Figures 1–2).
+
+```{r}
+#Load objects
+load("objects/metrics.RData")
+load("objects/bathymetry.RData")
+
+#Setup plot with forecast
+metrics.tidy <- metrics %>%
+  filter(core.percentiles==sel.core.percent) %>%
+  transform(ptile.westward=-ptile.westward) %>%
+  select("a) Area (km²)"=ptile.area,
+         "b) Westward extent (deg W)"=ptile.westward,
+         date,year,month) %>%
+  gather("metric","value",-date,-year,-month)
+hist.dat <- subset(metrics.tidy,month==spawn.month)
+hist.dat$type <- "Hist. (Modelled)"
+forecast.dat <- subset(metrics.tidy,date==max(metrics.tidy$date))
+forecast.dat$type <- "Forecast"
+
+#Make Figure 1 plot of time series
+ggplot(mapping=aes(date,value))+
+  geom_line(data = hist.dat,linetype=3)+
+  geom_point(data=hist.dat,size=3,aes(col=type))+
+  geom_point(data=forecast.dat,size=3,aes(col=type))+
+  facet_grid(metric~.,scales = "free_y")+
+  theme_bw()+
+  labs(x="Date",y="Value",col="Key")
+```
+*Figure 1. a) Time-series of the area (km²) of core spawning area of blue whiting in the month of peak spawning (March). b) Time series of the westward extent (degrees of Longitude W) of core spawning area. Historical (blue crosses) and forecast (orange dot) values are shown.*
+
+```{r}
+#Figure 2, map of spawning
+fname.forecast <- rev(metrics$fname)[1]
+forecast.r <- raster(file.path(pred.dir,fname.forecast))
+forecast.r.df <- data.frame(coordinates(forecast.r),value=forecast.r[])
+forecast.r.df <- subset(forecast.r.df,!is.na(value))
+forecast.r.df$val.rounded <- factor(floor(forecast.r.df$value*10)/10)
+bath.df <- data.frame(coordinates(bath),bath=-bath[])
+ggplot(forecast.r.df,aes(x,y,fill=val.rounded))+
+  geom_raster()+
+  coord_quickmap(xlim=extent(forecast.r)[1:2],
+                 ylim=extent(forecast.r)[3:4],expand=FALSE)+
+  borders(xlim=extent(forecast.r)[1:2],
+          ylim=extent(forecast.r)[3:4],fill="black",col="black")+
+  geom_contour(data=bath.df,aes(x,y,z=bath,fill=bath,linetype=factor(..level..)),
+               breaks=c(500,2000),col="black")+
+  scale_fill_brewer(palette="YlOrRd",direction = 1)+
+  theme_bw()+  
+  labs(x="",y="",fill="Probability",linetype="Depth (m)")
+
+```
+*Figure 2. Forecast spawning habitat for blue whiting in March 2018. The colour scale corresponds to the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder: probabilities > 0.4 can be considered as the core spawning habitat. The 500m and 2000m isobaths are added for reference.*
+
+##Background
+
+The spawning distribution of blue whiting has varied in the past and has expanded, contracted and shifted locations (Figures 1, 3). The dominant feature of these changes is a westward expansion away from the shelf-break region west of the north-west European continental shelf onto the Rockall plateau and Hatton bank region (Figure 3).
+
+![*Figure 3. Spatial distributions of blue whiting from the International Blue Whiting Spawning Stock survey in two years characterized by different oceanographic conditions. Note the large difference in range occupied towards the west in 2007 compared to 2013.*](figures/Figure03.png)
+
+A key ocean phenomenon which has been linked to these distributional changes is the sub-polar gyre (Hatun et al 2009 CJFAS). The gyre is a dynamic large-scale ocean feature in the north Atlantic associated with the interaction of several major currents (Hatun et al. 2005, refs.) and plays a key role in the the distribution of major water masses in the region. The spawning distribution of blue whiting has been linked to these oceanographic conditions, and in particular to the salinity in the region, occuring within a narrow salinity window (Figure 4). 
+
+![*Figure 4. Presence frequency of spawning blue whiting (number of pixels with presences) observed in scientific surveys a) and caught in fisheries b) compared to the salinity (300-600 m) at which these observations were made (bars). The blue line indicates the modelled smooth function of blue whiting larval-presence obtained from the Species Distribution Model (SDM) based on larval blue whiting catches by the CPR survey d), with dashed lines indicating the standard error. Panel a) shows observations from late March/ early April, and Panel b) data shows data from March. The SDM was calibrated with CPR data from February to June.*](figures/Figure04.png)
+
+The slow dynamics of oceanographic properties in the region can be used to provide reliable estimates of future distributions of water masses and thereby spawning habitat for blue whiting up to a year in advance. 
+
+##Quality Considerations
+
+This forecast is a prediction of the potential spawning habitat of the species, and should not be interpreted as a direct forecast of distribution. While there is a relationship between the two, it is important to remember that the actual distribution of spawning may not utilise all of the potential spawning habitat (e.g. due to migration dynamics, density-dependent processes or other biotic factors). On the other hand, it is unlikely that spawning can occur in the absence of suitable habitat. The ability of this forecast to represent distribution is therefore asymmetrical.
+
+Forecasts of the physical environment in this region are based on persistence i.e. the assumption that, for example, next year will be the same as this year. While the dynamics in this region are typically slow, they have occasionally moved rapidly, which could cause discrepancies between forecasted and observed spawning habitat. However, such events are considered relatively rare given the high level of persistence in the ocean dynamics in the region.
+
+##Basis for Forecast
+
+This forecast is based on a species distribution model developed by Miesner et al 2018. The model uses observations of blue whiting larvae captured in the Continuous Plankton Recorder (CPR) as a response variable and links their presence to environmental covariates as explanatory variables, including salinity at spawning depth (300-600m), latitude, day of year, solar elevation angle and bathymetry. Salinity at spawning depth was shown to be the most important environmental factor that varied inter-annually, and drives the westward expansion of spawning habitat. The model has been verified by cross-validation with the CPR observations. Furthermore, the sensitivity of the larval response to salinity obtained from CPR data shows good agreement with independent distribution data sets obtained from both commercial fishers and scientific surveys (Figure 5). Core spawning habitat is defined as a probability (p) of observing larvae with p ≥ 0.4 in a single haul from the CPR survey.
+
+Forecasts of the physical environment (and specifically salinity at spawning depth) are derived by assuming that the most recent state of the environment (March 2017) will persist until at least the next spawning period (March 2018), and possibly beyond. The EN4 data set (v4.2.0) is used as the source of physical observations (Good et al 2013).
+
+##Forecast Skill Assessment
+
+Forecast skill was assessed using historical data independent of those used in model development, for different time lags. The skill based on persistence significant for forecast lead-times up to 2-3 years (Figure 5). 
+
+![*Figure 5. Skill assessment of forecasts of the area (km²) and westward extent of potential spawning area for blue whiting in the waters west of the northwest European continental shelf. The plots show correlation based on persistence of ocean dynamics for various lead times into the future. The dashed line indicates the minimum significant correlation (P > 0.05).*](figures/Figure05.png)
+
+##For More Information
+
+For more information, contact Mark R. Payne, DTU-Aqua. The latest version of this and other forecasts can be found on the website [www.fishforecasts.aqua.dtu.dk](http://www.fishforecasts.aqua.dtu.dk). Code used to generate this forecast is availabe from the WGS2D GitHub repository, [https://github.com/ices-eg/wg_WGS2D](https://github.com/ices-eg/wg_WGS2D) in the directory "001_Blue_whiting_spawing_distribution".
+
+##References
+
+Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawning distribution of blue whiting (*Micromesistius poutassou*). Fisheries Oceanography. In press.
+
+Good, S. A., M. J. Martin and N. A. Rayner, 2013. EN4: quality controlled ocean temperature and salinity profiles and monthly objective analyses with uncertainty estimates, Journal of Geophysical Research: Oceans, 118, 6704-6716, doi:10.1002/2013JC009067
+
+Hátún H, Payne MR, Jacobsen JA (2009) The North Atlantic subpolar gyre regulates the spawning distribution of blue whiting (Micromesistius poutassou). Canadian Journal of Fisheries and Aquatic Sciences 66: 759–770 
+
+
+***
+*This work by WGS2D is licensed under a  Creative Commons
+Attribution-NonCommercial-ShareAlike 3.0 Unported License. 
+For details, see http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US
+Basically, this means that you are free to "share" and "remix" for 
+non-commerical purposes as you see fit, so long as you "attribute" me for my
+contribution. Derivatives can be distributed under the same or 
+similar license.*
+
+*This work comes with ABSOLUTELY NO WARRANTY or support.*
+
+***
