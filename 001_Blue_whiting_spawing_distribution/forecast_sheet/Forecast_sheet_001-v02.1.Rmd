@@ -1,6 +1,6 @@
 ---
 title: "Blue Whiting Spawning Habitat Forecast"
-subtitle: "ICES WGS2D Forecast sheet 001-v02 "
+subtitle: "ICES WGS2D Forecast sheet 001-v02.1 "
 output: html_document
 ---
 
@@ -28,8 +28,8 @@ htmltools::img(src = knitr::image_uri(file.path("..", "WGS2D_logo.png")),
                style = 'position:absolute; top:0; right:0; padding:10px;')
 ```
 
-Issued 15-08-2018. Valid through to 01-06-2018.    
-This forecast sheet superceeds the previous version 001-v01, issued 14-06-2017.  
+Issued 17-01-2018. Valid through to 01-06-2018.    
+This forecast sheet superceeds the previous version 001-v02, issued 17-01-2018. For details, see the Change Log at the bottom of this document.
 
 ***
 
@@ -47,6 +47,8 @@ library(tidyr)
 
 #Configuration
 sel.core.percent <- 0.2
+sal.src <- "data/EN4/EN.4.2.0.p.analysis.g10.201710.salinity.nc"
+sal.isohalines <- c(35.3,35.5)  #psu
 
 ```
 
@@ -84,26 +86,44 @@ ggplot(mapping=aes(date,value))+
 
 ```{r Fig_Forecast_map}
 #Figure 2, map of spawning
+#Setup forecast data
 fname.forecast <- rev(metrics$fname)[1]
 forecast.r <- raster(file.path(pred.dir,fname.forecast))
 forecast.r.df <- data.frame(coordinates(forecast.r),value=forecast.r[])
 forecast.r.df <- subset(forecast.r.df,!is.na(value))
 forecast.r.df$val.rounded <- factor(floor(forecast.r.df$value*10)/10)
 bath.df <- data.frame(coordinates(bath),bath=-bath[])
-ggplot(forecast.r.df,aes(x,y,fill=val.rounded))+
-  geom_raster()+
-  coord_quickmap(xlim=extent(forecast.r)[1:2],
-                 ylim=extent(forecast.r)[3:4],expand=FALSE)+
-  borders(xlim=extent(forecast.r)[1:2],
-          ylim=extent(forecast.r)[3:4],fill="black",col="black")+
-  geom_contour(data=bath.df,aes(x,y,z=bath,fill=bath,linetype=factor(..level..)),
-               breaks=c(500,2000),col="black")+
+
+#Setup isohaline contours
+sal.b <- raster(sal.src)
+sal.b.hires <- disaggregate(sal.b,
+                            fact=res(sal.b)/res(forecast.r),
+                            method="bilinear")
+suitable.sal <- sal.b.hires > min(sal.isohalines) & sal.b.hires < max(sal.isohalines)
+sal.suit.df <- data.frame(coordinates(suitable.sal),
+                          suitable=as.numeric(suitable.sal[]))
+sal.df <- data.frame(coordinates(sal.b.hires),
+                          suitable=as.numeric(sal.b.hires[]))
+
+#Do plot
+plot.xlims <- extent(forecast.r)[1:2]
+plot.ylims <- extent(forecast.r)[3:4]
+
+ggplot(forecast.r.df,aes(x,y))+
+  geom_raster(aes(fill=val.rounded))+
+  coord_quickmap(xlim=plot.xlims,ylim=plot.ylims,expand=FALSE)+
+  geom_contour(data=bath.df,aes(z=bath,linetype=factor(..level..)),
+               breaks=c(1000,2000),col="black")+
+  geom_contour(data=sal.df,aes(z=suitable),
+               breaks=sal.isohalines,size=1,col="blue")+
+  borders(xlim=plot.xlims,ylim=plot.ylims,
+          fill="black",col="black")+
   scale_fill_brewer(palette="YlOrRd",direction = 1)+
   theme_bw()+  
   labs(x="",y="",fill="Probability",linetype="Depth (m)")
 
 ```
-*Figure 2. Forecast spawning habitat for blue whiting in March 2018. The colour scale corresponds to the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder: probabilities > 0.4 can be considered as the core spawning habitat. The 500m and 2000m isobaths are added for reference.*
+*Figure 2. Forecast spawning habitat for blue whiting in March 2018. The colour scale corresponds to the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder: probabilities > 0.4 can be considered as the core spawning habitat. The isohalines defining the suitable salinity window (35.3 - 35.5) at spawning depth are marked with a blue contour line. The 500m and 2000m isobaths are added for reference.*
 
 ## Background
 
@@ -149,7 +169,6 @@ Hátún H, Payne MR, Jacobsen JA (2009) The North Atlantic subpolar gyre regulat
 
 Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawning distribution of blue whiting (*Micromesistius poutassou*). Fisheries Oceanography. In press.
 
-
 ***
 *This work by WGS2D is licensed under a  Creative Commons
 Attribution-NonCommercial-ShareAlike 3.0 Unported License. 
@@ -162,3 +181,11 @@ similar license.*
 *This work comes with ABSOLUTELY NO WARRANTY or support.*
 
 ***
+
+## Change Log
+
+* 001-v02.1 17-01-2018. Minor update to include salinity contours in Figure 2.
+* 001-v02 15-01-2018. Updated to October 2017 oceanography. Visual improvements.
+* 001-v01 14-06-2017. Initial draft version
+
+
