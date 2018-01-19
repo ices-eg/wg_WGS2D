@@ -30,6 +30,7 @@ htmltools::img(src = knitr::image_uri(file.path("..", "WGS2D_logo.png")),
 
 Issued 17-01-2018. Valid through to 01-06-2018.    
 This forecast sheet superceeds the previous version 001-v02, issued 17-01-2018. For details, see the Change Log at the bottom of this document.
+Next update planned on or before 1 March 2018.
 
 ***
 
@@ -159,6 +160,9 @@ Forecast skill was assessed using historical data independent of those used in m
 
 For more information, contact Mark R. Payne, DTU-Aqua. The latest version of this and other forecasts can be found on the website [www.fishforecasts.aqua.dtu.dk](http://www.fishforecasts.aqua.dtu.dk). Code used to generate this forecast is availabe from the WGS2D GitHub repository, [https://github.com/ices-eg/wg_WGS2D](https://github.com/ices-eg/wg_WGS2D) in the directory "001_Blue_whiting_spawing_distribution".
 
+## Acknowledgements
+The research leading to these results has received funding from the European Union 7th Framework Programme (FP7 2007–2013) under grant agreement number 308299 (NACLIM) and the Horizon 2020 research and innovation programme under grant agreement number 727852 (Blue-Action).
+
 ## References
 
 Good, S. A., M. J. Martin and N. A. Rayner. (2013). EN4: quality controlled ocean temperature and salinity profiles and monthly objective analyses with uncertainty estimates, Journal of Geophysical Research: Oceans, 118, 6704-6716, doi:10.1002/2013JC009067
@@ -168,6 +172,12 @@ Hátún, H., Sandø, A. B., Drange, H., Hansen, B., & Valdimarsson, H. (2005). I
 Hátún H, Payne MR, Jacobsen JA (2009) The North Atlantic subpolar gyre regulates the spawning distribution of blue whiting (Micromesistius poutassou). Canadian Journal of Fisheries and Aquatic Sciences 66: 759–770 
 
 Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawning distribution of blue whiting (*Micromesistius poutassou*). Fisheries Oceanography. In press.
+
+## Change Log
+
+* 17-01-2018.v02.1 Minor update to include salinity contours in Figure 2.
+* 15-01-2018.v02 Updated to October 2017 oceanography. Visual improvements.
+* 14-06-2017.v01 Initial draft version
 
 ***
 *This work by WGS2D is licensed under a  Creative Commons
@@ -182,10 +192,9 @@ similar license.*
 
 ***
 
-## Change Log
+![](resources/blue-action-logo.png)
 
-* 001-v02.1 17-01-2018. Minor update to include salinity contours in Figure 2.
-* 001-v02 15-01-2018. Updated to October 2017 oceanography. Visual improvements.
-* 001-v01 14-06-2017. Initial draft version
+
+
 
 
