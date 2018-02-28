@@ -34,7 +34,7 @@ log.msg <- function(fmt,...) {cat(sprintf(fmt,...));
 # Configuration
 #==========================================================================
 #Region of interest
-years.ROI <- 1950:2017
+years.ROI <- 1950:2018
 spatial.ROI <- extent(-21,0,44,65)
 spawn.month <- 3  #Peak spawning in march, even though we observe peak larvae
                   #later in April.
