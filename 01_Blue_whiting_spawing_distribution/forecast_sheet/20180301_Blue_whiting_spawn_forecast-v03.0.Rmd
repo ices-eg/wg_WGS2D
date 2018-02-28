@@ -1,7 +1,9 @@
 ---
 title: "Blue Whiting Spawning Habitat Forecast"
-subtitle: "ICES WGS2D Forecast sheet 001-v02.1 "
-output: html_document
+subtitle: 'ICES WGS2D Forecast sheet 01-v03.0'
+output:
+  html_document: default
+  word_document: default
 ---
 
 ```{r setup, include="FALSE"}
@@ -28,9 +30,11 @@ htmltools::img(src = knitr::image_uri(file.path("..", "WGS2D_logo.png")),
                style = 'position:absolute; top:0; right:0; padding:10px;')
 ```
 
-Issued 17-01-2018. Valid through to 01-06-2018.    
-This forecast sheet superceeds the previous version 001-v02, issued 17-01-2018. For details, see the Change Log at the bottom of this document.
-Next update planned on or before 1 March 2018.
+Issued 01-03-2018. Valid through to 01-06-2018.    
+
+This forecast sheet superceeds the previous version 001-v02.1, issued 17-01-2018. For details, see the Change Log at the bottom of this document.
+
+This is the final update for the 2018 spawning season. The first forecast for the 2019 spawning season is planned on or before 1 October 2018.
 
 ***
 
@@ -45,6 +49,7 @@ source("src/00.Common_elements.r")
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+library(raster)
 
 #Configuration
 sel.core.percent <- 0.2
@@ -100,9 +105,9 @@ sal.b <- raster(sal.src)
 sal.b.hires <- disaggregate(sal.b,
                             fact=res(sal.b)/res(forecast.r),
                             method="bilinear")
-suitable.sal <- sal.b.hires > min(sal.isohalines) & sal.b.hires < max(sal.isohalines)
-sal.suit.df <- data.frame(coordinates(suitable.sal),
-                          suitable=as.numeric(suitable.sal[]))
+# suitable.sal <- sal.b.hires > min(sal.isohalines) & sal.b.hires < max(sal.isohalines)
+# sal.suit.df <- data.frame(coordinates(suitable.sal),
+#                           suitable=as.numeric(suitable.sal[]))
 sal.df <- data.frame(coordinates(sal.b.hires),
                           suitable=as.numeric(sal.b.hires[]))
 
@@ -138,11 +143,17 @@ The spawning distribution of blue whiting has been linked to oceanographic condi
 
 ## Basis for Forecast
 
+|Component | Description                                                 |
+-----------------|:-----------------------------------------------
+Biological model | Species distribution model (GAM) using salinity, latitude, day-of-year, solar elevation, and depth. Model is parameterised against observations of Blue Whiting larvae from the continuous plankton recorder (CPR) between 1951 and 2005.
+Physical data set | EN v4.2.1 (Good et al 2013)
+Physical variables| Salinity averaged over 250-600m depth on a pixel-by-pixel basis
+Physical forecast method |  Persistence from the most recent data product 
+Forecast lead time | Two months (From January 2018 to March 2018)
+
 This forecast is based on a species distribution model developed by Miesner and Payne (2018). The model uses observations of blue whiting larvae captured in the Continuous Plankton Recorder (CPR) as a response variable and links their presence to environmental covariates as explanatory variables, including salinity at spawning depth (300-600m), latitude, day of year, solar elevation angle and bathymetry. Salinity at spawning depth was shown to be the most important environmental factor that varied inter-annually, and drives the westward expansion of spawning habitat. The model has been verified by cross-validation with the CPR observations. Furthermore, the sensitivity of the larval response to salinity obtained from CPR data shows good agreement with independent distribution data sets obtained from both commercial fishers and scientific surveys (Figure 4). 
 
-Forecasts of the physical environment (and specifically salinity at spawning depth) are derived by assuming that the most recently observed state of the environment will persist until at least the next spawning period and possibly beyond. The EN4 data set (v4.2.0) is used as the source of physical observations (Good et al 2013).
-
-This forecast is based on persistence of conditions from October 2017 to March 2018, a lead time of five months. 
+Forecasts of the physical environment (and specifically salinity at spawning depth) are derived by assuming that the most recently observed state of the environment will persist until at least the next spawning period and possibly beyond. 
 
 ## Quality Considerations
 
@@ -175,9 +186,56 @@ Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawn
 
 ## Change Log
 
-* 17-01-2018.v02.1 Minor update to include salinity contours in Figure 2.
-* 15-01-2018.v02 Updated to October 2017 oceanography. Visual improvements.
-* 14-06-2017.v01 Initial draft version
+* 20180301.v03.0 Updated EN4 data set to 4.2.1. Added forecast expressed as an anomaly. Added "forecast basis" summary table. Added supplementary information comparing with survey track and current oceanographic state.
+* 20180117.v02.1 Minor update to include salinity contours in Figure 2.
+* 20180115.v02 Updated to October 2017 oceanography. Visual improvements.
+* 20170614.v01 Initial draft version
+
+## Supplementary Information
+
+### S1. Oceanographic Conditions
+
+```{r Oceanography}
+
+#Map and time series of salinity
+#Setup salinity data
+sal.b <- raster(sal.src)
+sal.df <- data.frame(coordinates(sal.b),
+                     value=sal.b[])
+sal.df$val.rounded <- factor(sprintf("%2.1f",round(sal.df$value*5)/5))
+sal.df <- subset(sal.df,!is.na(value))
+
+#Setup isohaline contours
+sal.b.hires <- disaggregate(sal.b,
+                            fact=res(sal.b)/res(forecast.r),
+                            method="bilinear")
+sal.hires.df <- data.frame(coordinates(sal.b.hires),
+                          sal=sal.b.hires[])
+
+#Do plot
+plot.xlims <- extent(sal.b)[1:2]
+plot.ylims <- extent(sal.b)[3:4]
+
+ggplot(sal.df,aes(x,y))+
+  geom_raster(aes(fill=val.rounded))+
+  coord_quickmap(xlim=plot.xlims,ylim=plot.ylims,expand=FALSE)+
+  geom_contour(data=bath.df,aes(z=bath,linetype=factor(..level..)),
+               breaks=c(1000,2000),col="black")+
+  geom_contour(data=sal.hires.df,aes(z=sal),
+               breaks=sal.isohalines,size=1,col="blue")+
+  borders(xlim=plot.xlims,ylim=plot.ylims,
+          fill="black",col="black")+
+  scale_fill_brewer(palette="YlOrRd",direction = 1)+
+  theme_bw()+  
+  labs(x="",y="",fill="Salinity",linetype="Depth (m)")
+
+```
+*Figure S1. Observed salinity distribution for January 2018. The isohalines defining the suitable salinity window (35.3 - 35.5) at spawning depth for Blue Whiting are marked with a blue contour line. The 500m and 2000m isobaths are added for reference.*
+
+### S2. Comparison with proposed survey track
+
+
+
 
 ***
 *This work by WGS2D is licensed under a  Creative Commons
