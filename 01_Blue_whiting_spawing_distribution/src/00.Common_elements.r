@@ -27,8 +27,29 @@
 #==========================================================================
 library(raster)
 
-log.msg <- function(fmt,...) {cat(sprintf(fmt,...));
+#Simple helper function to generate custom messages
+log.msg <- function(fmt,...) {message(sprintf(fmt,...));
   flush.console();return(invisible(NULL))}
+
+#Helper function to convert a raster into a dataframe, with additional
+#columns provided as ... arguments
+raster2df <- function(x,...){data.frame(coordinates(x),value=x[],...)}
+
+#A windowed factorisation function, that discretises a vector x into
+#a ordered factor, with levels given by the lvls argument. fmt controls
+#the formatting applied to levels
+discretise <- function(x,lvls,fmt,limits=c(TRUE,TRUE)) {
+  nearest.lvl <- apply(abs(outer(x,lvls,"-")),1,which.min)
+  lvl.str <- sprintf(fmt,lvls)
+  if(limits[1]) {
+      lvl.str[1] <- sprintf(paste0("<",fmt),lvls[1])
+  }
+  if(limits[2]) {
+    lvl.str[length(lvls)] <- sprintf(paste0(">",fmt),lvls[length(lvls)])
+  }
+  rtn <- factor(lvl.str[nearest.lvl],lvl.str,ordered = TRUE)
+  return(rtn)
+}
 
 #==========================================================================
 # Configuration
