@@ -66,7 +66,7 @@ snp.cfg <- update(snp.cfg,
                   out.dir=file.path(PSY4.data.dir,"database"),
               out.name=sprintf("%s_snapshot.nc",mdl.name),
               script=motu.client,
-              depth.min="Surface",depth.min=1000)
+              depth.min="Surface",depth.max="1000")
 
 #Download snapshot
 CMEMS.download(snp.cfg,ROI=spatial.ROI,
