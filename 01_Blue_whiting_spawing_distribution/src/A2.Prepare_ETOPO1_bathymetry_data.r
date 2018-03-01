@@ -43,24 +43,38 @@ source("src/00.Common_elements.r")
 ETOPO1.fname <- "data/ETOPO1_Bed_c_gmt4.grd"
 
 #==========================================================================
-# Process
+# Process raster
 #==========================================================================
+log.msg("Processing raster...\n")
 #Setup raster
 bath.raw <- raster(ETOPO1.fname)
 
 #Crop - with a bit of fluff around the outside
 spatial.ROI.fluff <- extend(spatial.ROI,y = c(2,2))
-bath <- raster::crop(bath.raw,spatial.ROI.fluff,snap="out")
+bath.crop <- raster::crop(bath.raw,spatial.ROI.fluff,snap="out")
 
 #Reduce resolution
-bath <- aggregate(bath,fact=pred.res/res(bath.raw),fun=median)
+bath <- aggregate(bath.crop,fact=pred.res/res(bath.raw),fun=median)
 
 #Remove land and zeros
 bath[bath>=0] <- NA
 log10bath <- log10(-1*bath)
 
+#==========================================================================
+# Process polygon
+#==========================================================================
+log.msg("Creating bathymetry polygon...\n")
+#Re-aggregate to a relatively fine resolution, chosen arbitrarily
+#in the sake of sanity e.g. 0.125
+bath2 <- aggregate(bath.crop,fact=0.125/res(bath.raw),fun=median)
+
+#Make a polygon delineating the minimum spawning depth
+bath2[bath2>=0] <- NA
+bath2[] <- ifelse(abs(bath2[])> min(spawn.depth),1,NA)
+bath.poly <- rasterToPolygons(bath2,dissolve = TRUE)
+
 #Save object
-save(bath,log10bath,file="objects/bathymetry.RData")
+save(bath,log10bath,bath.poly,file="objects/bathymetry.RData")
 
 #==========================================================================
 # Complete
