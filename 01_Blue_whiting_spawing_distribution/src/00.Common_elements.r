@@ -39,7 +39,7 @@ climatology.yrs <- 1960:2010
 spatial.ROI <- extent(-21,0,44,65)
 spawn.month <- 3  #Peak spawning in march, even though we observe peak larvae
                   #later in April.
-depth.range <- c(250,600)
+spawn.depth <- c(250,600)
 oceanography.ROI <- extent(-20,0,50,60)  #Focus on spawning region
 
 #Directories

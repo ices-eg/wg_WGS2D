@@ -70,7 +70,7 @@ for(f in PSY4.db$fname) {
       layer.bnds <- c(0,approx(seq(layer.midpoints)-0.5,layer.midpoints,
                                 seq(layer.midpoints))$y)
       layer.thickness <- diff(layer.bnds)
-      layer.idxs <- which(layer.midpoints > min(depth.range) & layer.midpoints < max(depth.range))
+      layer.idxs <- which(layer.midpoints > min(spawn.depth) & layer.midpoints < max(spawn.depth))
       
       #Drop vertical layers that we don't need
       b <- b.raw[[layer.idxs]]
