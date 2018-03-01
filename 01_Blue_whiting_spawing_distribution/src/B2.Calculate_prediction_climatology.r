@@ -1,16 +1,14 @@
 ###########################################################################
-# Common_elements
+# Calculate_prediction_climatology
 # ==========================================================================
 #
 # by Mark R Payne  
 # DTU-Aqua, Kgs. Lyngby, Denmark  
 # http://www.staff.dtu.dk/mpay  
 #
-# Created Fri Jan  5 15:45:17 2018
+# Created Wed Feb 28 16:45:44 2018
 # 
-# Defines common variables of interest for use across the various other
-# scripts. This script is intended to be source by other scripts during
-# their startup phase.
+# Calculates the climatological prediction of Blue Whiting distribution
 #
 # This work is subject to a Creative Commons "Attribution" "ShareALike" License.
 # You are largely free to do what you like with it, so long as you "attribute" 
@@ -23,32 +21,49 @@
 ###########################################################################
 
 #==========================================================================
-# Helper Functions / Libraries
+# Initialise system
 #==========================================================================
-library(raster)
+cat(sprintf("\n%s\n","Calculate_prediction_climatology"))
+cat(sprintf("Analysis performed %s\n\n",base::date()))
 
-log.msg <- function(fmt,...) {cat(sprintf(fmt,...));
-  flush.console();return(invisible(NULL))}
+#Do house cleaning
+rm(list = ls(all.names=TRUE));  graphics.off();
+start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
+
+#Helper functions, externals and libraries
+source("src/00.Common_elements.r")
+library(tidyverse)
+library(stringr)
+library(lubridate)
 
 #==========================================================================
-# Configuration
+# Setup
 #==========================================================================
-#Region of interest
-years.ROI <- 1950:2018
-climatology.yrs <- 1960:2010
-spatial.ROI <- extent(-21,0,44,65)
-spawn.month <- 3  #Peak spawning in march, even though we observe peak larvae
-                  #later in April.
-depth.range <- c(250,600)
-oceanography.ROI <- extent(-20,0,50,60)  #Focus on spawning region
+#Get list of prediction files
+pred.fnames <- dir(pred.dir,full.names = TRUE,pattern="nc$")
+meta.df.all <- tibble(fname=pred.fnames,
+                  date.str=str_extract(pred.fnames,"[0-9]{6}"),
+                  date=ymd(paste0(date.str,"01")))
 
-#Directories
-EN4.data.dir <- "data/EN4"
-PSY4.data.dir <- "data/PSY4V3R1"
-pred.dir <- file.path("outputs","predictions")
+#Focus on the months of interest
+meta.df <- subset(meta.df.all,month(date)==spawn.month &
+                              year(date) %in% climatology.yrs)
 
-#Resolution of predicted distribution
-pred.res <- c(0.25,0.25)
+#Now make one big stack over the whole lot
+preds.s <- stack(meta.df$fname)
+
+#And average
+pred.clim <- mean(preds.s)
+
+#Save results
+save(pred.clim,file="objects/Prediction_climatology.RData")
+
+#==========================================================================
+# Complete
+#==========================================================================
+#Turn off the lights
+if(grepl("pdf|png|wmf",names(dev.cur()))) {dmp <- dev.off()}
+log.msg("\nAnalysis complete in %.1fs at %s.\n",proc.time()[3]-start.time,base::date())
 
 # -----------
 # This work by Mark R Payne is licensed under a  Creative Commons
