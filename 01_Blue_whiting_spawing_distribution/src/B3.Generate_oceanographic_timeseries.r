@@ -35,7 +35,8 @@ start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
 source("src/00.Common_elements.r")
 library(tidyverse)
 library(tibble)
-
+library(stringr)
+library(lubridate)
 
 #==========================================================================
 # Setup file lists
@@ -62,8 +63,6 @@ meta.df <- rbind(EN4.meta,PSY4.meta)
 #==========================================================================
 #Setup polygon to delineate depth regions
 load("objects/bathymetry.RData")
-bath[] <- ifelse(abs(bath[])> min(depth.range),1,NA)
-bath.sp <- rasterToPolygons(bath,dissolve = TRUE)
 
 #Loop over files
 meta.df$salinity <- as.double(NA)
@@ -76,7 +75,7 @@ for(i in seq(nrow(meta.df))) {
   r <- raster::crop(r,oceanography.ROI)
   
   #Mask with bathymetry
-  r.masked <- mask(r,bath.sp)
+  r.masked <- mask(r,bath.poly)
   
   #Perform averaging
   area.r <- area(r.masked)
@@ -91,7 +90,6 @@ for(i in seq(nrow(meta.df))) {
 ocean.dat.df <- meta.df
 
 save(ocean.dat.df,file="objects/ocean_data.RData")
-
 
 #==========================================================================
 # Complete
