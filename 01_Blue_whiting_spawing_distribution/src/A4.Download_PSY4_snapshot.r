@@ -38,8 +38,10 @@ source("src/00.Common_elements.r")
 library(tidyverse)
 library(lubridate)
 if(!require(RCMEMS)){
-  log.msg("Installing RCMEMS package...\n")
-  devtools::install_github("markpayneatwork/RCMEMS")
+  stop(paste("This function requiers the RCMEMS package to download data from Copernicus.",
+             "It can be installed using the following command:\n",
+             'devtools::install_github("markpayneatwork/RCMEMS")\n',
+             "Stopping."))
 }
 library(stringr)
 
