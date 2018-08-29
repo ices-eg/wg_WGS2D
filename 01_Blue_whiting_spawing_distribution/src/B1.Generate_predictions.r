@@ -61,7 +61,12 @@ load(mdl.fname)
 load(bath.fname)
 
 #Get list of EN4 files to predict for
-salinity.fnames <- dir(EN4.data.dir,pattern=".*salinity.*",full.names=TRUE)
+files.df <- data.frame(salinity=dir(EN4.data.dir,pattern=".*salinity.*",full.names=TRUE))
+files.df$pred.fname <- file.path(pred.dir,sprintf("pred.%s",basename(files.df$salinity)))
+files.df$year <- gsub("^.*\\.([0-9]{4})[0-9]{2}\\..*$","\\1",basename(files.df$pred.fname))
+
+#But only process those that are missing from the output
+process.files <- subset(files.df,!file.exists(files.df$pred.fname) & year %in% years.ROI)
 
 #Create a latitude raster
 lat.rast <- log10bath
@@ -70,10 +75,11 @@ lat.rast[] <- yFromCell(lat.rast,1:ncell(log10bath))
 #==========================================================================
 # Loop over files
 #==========================================================================
-for(f in salinity.fnames) {
-  log.msg("Now making predictions for %s...\n",basename(f))
+for(i in seq(nrow(process.files))) {
+  f <- process.files[i,]
+  log.msg("Now making predictions for %s...\n",basename(f$pred.fname))
   #Import file
-  sal.b.raw <- raster(f)
+  sal.b.raw <- raster(f$salinity)
   #Adjust resolution to the prediction scale - should probably be done in the
   #extraction phase if this is too slow, but lets just leave it for the moment
   sal.b <- disaggregate(sal.b.raw,fact=res(sal.b.raw)/pred.res,method="bilinear")
@@ -85,9 +91,10 @@ for(f in salinity.fnames) {
   
   #Now, we're ready to predict
   pred <- predict(pred.dat, bw.model,const=pred.consts,type="response")
+  crs(pred) <-"+proj=longlat"
   
   #Save output
-  writeRaster(pred,file=file.path(pred.dir,sprintf("pred.%s",basename(f))),overwrite=TRUE)
+  writeRaster(pred,file=f$pred.fname,overwrite=TRUE)
 
 }
 

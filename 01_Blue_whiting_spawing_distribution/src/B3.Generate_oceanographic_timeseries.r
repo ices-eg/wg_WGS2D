@@ -53,7 +53,8 @@ PSY4.fnames <- dir(PSY4.data.dir,full.names = TRUE,pattern="nc$")
 PSY4.meta <- tibble(source="PSY4",
                     fname=PSY4.fnames,
                    date.str=str_extract(PSY4.fnames,"[0-9]{8}"),
-                   date=ymd(date.str))
+                   date=ymd(date.str)) %>%
+            subset(!grepl("snapshot",fname))
 
 #Merge
 meta.df <- rbind(EN4.meta,PSY4.meta)
