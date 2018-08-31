@@ -1,0 +1,43 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+#/*##########################################################################*/
+#'
+#' Exploratory analysis of the MEGS dataset 
+#
+#  This work is subject to a Creative Commons "Attribution" "ShareALike" License.
+#  You are largely free to do what you like with it, so long as you "attribute" 
+#  me for my contribution. See the fine print at the end for exact details.
+#
+#  To do: FUll exploratory analysis
+#
+#  Notes:
+#/*##########################################################################*/
+
+library(knitr)
+library(ggplot2)
+library(sp)
+# ========================================================================
+# Setup data sources
+# ========================================================================
+#Identify data source and check it is unique. Load it.
+RData.fnames <- dir("../data",pattern="*.RData",full.names = TRUE)
+if(length(RData.fnames)!=1) stop("Cannot find a single .RData file in ./data")
+load(RData.fnames)
+
+shapefile.fnames <- dir("../objects",pattern="*.RData",full.names = TRUE)
+if(length(shapefile.fnames)!=1) stop("Cannot find a single .RData file in ./objects")
+load(shapefile.fnames)
+
+hauls.xy <- as.matrix(dat[,c("eastings","northings")])
+plot(ocean.refined)
+points(hauls.xy,pch=16,cex=0.25,col="red")
+```
+###To do the exploratory analysis
+
+
