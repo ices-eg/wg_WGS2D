@@ -1,0 +1,89 @@
+library(DATRAS)
+
+d1 <-  readExchange("C:\\Users\\jenniferd\\Documents\\_2018\\WGS2D\\saithe\\survey data\\Exchange_NS")
+d2 <-  readExchange("C:\\Users\\jenniferd\\Documents\\_2018\\WGS2D\\saithe\\survey data\\Exchange_SWC")
+
+d1[['HH']]$PA.sei<-NA;d1$PA.mat<-NA
+stno<-unique(d1[['HL']]$haul.id[d1[['HL']]$Species=='Pollachius virens'])
+d1[['HH']]$PA.sei<-ifelse(d1[['HH']]$haul.id %in% stno,1,0)
+stno<-unique(d1[['CA']]$haul.id[d1[['CA']]$Species=='Pollachius virens'&d1[['CA']]$Maturity %in% c('M','2','3','4','62','63','64','5','65')])
+d1[['HH']]$PA.mat<-ifelse(d1[['HH']]$haul.id %in% stno,1,0)
+#stno<-unique(d1[['CA']]$haul.id[d1[['CA']]$Species=='Pollachius virens'&d1[['CA']]$Maturity %in% c('M','2','3','4','62','63','64')])
+#d1[['HH']]$PA.mat2<-ifelse(d1[['HH']]$haul.id %in% stno,1,0)
+
+d2[['HH']]$PA.sei<-NA;d2$PA.mat<-NA;d2$PA.mat2<-NA
+stno<-unique(d2[['HL']]$haul.id[d2[['HL']]$Species=='Pollachius virens'])
+d2[['HH']]$PA.sei<-ifelse(d2[['HH']]$haul.id %in% stno,1,0)
+stno<-unique(d2[['CA']]$haul.id[d2[['CA']]$Species=='Pollachius virens'&d2[['CA']]$Maturity %in% c('M','2','3','4','62','63','64','5','65')])
+d2[['HH']]$PA.mat<-ifelse(d2[['HH']]$haul.id %in% stno,1,0)
+#stno<-unique(d2[['CA']]$haul.id[d2[['CA']]$Species=='Pollachius virens'&d2[['CA']]$Maturity %in% c('M','2','3','4','62','63','64')])
+#d2[['HH']]$PA.mat2<-ifelse(d2[['HH']]$haul.id %in% stno,1,0)
+
+ns<-d1[['HH']];ns$area<-'NS'
+swc<-d2[['HH']];swc$area<-'SWC'
+
+
+####
+## estimating numbers mature and immature, raised to total catch, keeping length info
+## removing everything except saithe because complete HH data already made above
+## Count in the HL is count by recorded HaulDur (not standardized to 60 min)
+d1<-subset(d1,Species=='Pollachius virens')
+d2<-subset(d2,Species=='Pollachius virens')
+
+hl<-d1[[3]][!is.na(d1[[3]]$haul.id)&!is.na(d1[[3]]$LngtCm),]
+ca<-d1[[1]][!is.na(d1[[1]]$haul.id)&!is.na(d1[[1]]$LngtCm),]
+##--------------------------------------------------------------------------------------------------------
+hl$Sex<-as.character(hl$Sex);ca$Sex<-as.character(ca$Sex)
+hl$Sex[is.na(hl$Sex)]<- 'N'; ca$Sex[is.na(ca$Sex)]<- 'N'
+
+#id<-match(paste(hl$haul.id,hl$LngtCm,hl$Sex),paste(ca$haul.id,ca$LngtCm,ca$Sex))
+#hl$num.mat[id]<-ca$Count[id&ca$Maturity %in% c('M','2','3','4','62','63','64','5','65')]	
+
+## quick fix for now - coming back to the scaling within length class
+library(data.table)
+
+## data by sex is full of errors - can't merge on this as it doesn't match (HL records often have -9 instead of the estimates by sex as in CA)
+xx<-aggregate(NoAtALK~haul.id+LngtCm,ca[ca$Maturity %in% c('M','2','3','4','62','63','64','5','65'),],sum);names(xx)[3]<-'num.Mat'
+yy<-aggregate(NoAtALK~haul.id+LngtCm,ca[!ca$Maturity %in% c('M','2','3','4','62','63','64','5','65'),],sum);names(yy)[3]<-'num.Imm'
+
+zz<-aggregate(TotalNo~haul.id,hl[!duplicated(paste(hl$haul.id,hl$Sex)),],function(x) sum(x,na.rm=T))
+
+xx<-merge(xx,yy,by=c('haul.id','LngtCm'),all=T)
+xx$TotalNo<-zz$TotalNo[match(xx$haul.id,zz$haul.id)]
+
+xx[is.na(xx)]<-0
+xx$sumNo<-xx$num.Mat+xx$num.Imm
+zz<-aggregate(sumNo~haul.id,xx,sum)
+xx$sumNo<-zz$sumNo[match(xx$haul.id,zz$haul.id)]
+
+xx$srf<-xx$TotalNo/xx$sumNo
+xx$num.Mat<-xx$num.Mat*xx$srf
+xx$num.Imm<-xx$num.Imm*xx$srf
+##check
+sum(xx$num.Mat,xx$num.Imm);sum(xx$TotalNo[!duplicated(xx$haul.id)])
+
+x<-aggregate(cbind(num.Mat,num.Imm)~haul.id,xx,sum)
+##--------------------------------------------------------------------------------------------------------
+
+ns$num.Mat<-x$num.Mat[match(ns$haul.id,x$haul.id)];ns$num.Imm<-x$num.Imm[match(ns$haul.id,x$haul.id)];
+ns$num.Mat[is.na(ns$num.Mat)]<-0;ns$num.Imm[is.na(ns$num.Imm)]<-0
+
+## repeat for swc data -- just doing first two lines and then using section above between ##---- 
+hl<-d2[[3]][!is.na(d2[[3]]$haul.id)&!is.na(d2[[3]]$LngtCm),]
+ca<-d2[[1]][!is.na(d2[[1]]$haul.id)&!is.na(d2[[1]]$LngtCm),]
+
+swc$num.Mat<-x$num.Mat[match(swc$haul.id,x$haul.id)];swc$num.Imm<-x$num.Imm[match(swc$haul.id,x$haul.id)];
+swc$num.Mat[is.na(swc$num.Mat)]<-0;swc$num.Imm[is.na(swc$num.Imm)]<-0
+
+
+d<-rbind(ns,swc)
+d$date<-paste(d$Year,d$Month,d$Day,sep='-')
+d$time<-ifelse(nchar(d$TimeShot)==4, paste(substr(d$TimeShot,1,2),substr(d$TimeShot,3,4),sep=':'),paste(substr(d$TimeShot,1,1),substr(d$TimeShot,2,3),sep=':'))
+d$date.time<-paste(d$date,d$time)
+d$doy<-as.numeric(strftime(d$date.time,format = "%j"))
+
+d$num.Mat[is.na(d$num.Mat)]<- 0
+d$num.Imm[is.na(d$num.Imm)]<- 0
+
+d<-d[,-71]
+write.table(d,"C:\\Users\\jenniferd\\Documents\\_2018\\WGS2D\\saithe\\survey data\\ns_swc.csv",sep=',',row.names=F,quote=F)

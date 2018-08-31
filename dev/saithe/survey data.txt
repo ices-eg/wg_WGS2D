@@ -1,0 +1,53 @@
+library(mgcv)
+d<-read.csv("C:\\Users\\jenniferd\\Documents\\_2018\\WGS2D\\saithe\\survey data\\ns_swc.csv",header=T)
+
+mod<-gam(PA.sei~te(lat,lon,doy,bs='ts'),data=d[d$Year==2017,],family='binomial')
+
+## a plot
+source("C:\\Users\\jenniferd\\Documents\\_2018\\2018103\\scripts\\BackgroundMap.r")
+x11(width=11,height=10)
+icesmap(yMin=52,xMax=15,xMin=-12,ICES.squares=F)
+points(d$lon[d$PA.sei!=1],d$lat[d$PA.sei!=1],pch='+',col=2)
+points(d$lon[d$PA.sei==1],d$lat[d$PA.sei==1],pch=19)
+points(d$lon[d$PA.mat==1&d$area=='NS'],d$lat[d$PA.mat==1&d$area=='NS'],pch=19,col=3)
+points(d$lon[d$PA.mat==1&d$area=='NS'&d$Year==2017],d$lat[d$PA.mat==1&d$area=='NS'&d$Year==2017],pch=19,col='orange')
+points(d$lon[d$PA.mat==1],d$lat[d$PA.mat==1],pch=19)
+
+# hist of doy
+hist(d$doy[d$Year==2017&d$PA.sei==1])
+x11();hist(d$doy[d$Year==2017&d$PA.mat==1])
+x11();hist(d$doy[d$Year==2017&d$PA.mat==1&d$area=='NS'])
+
+## SWC data 1985-2010 only with data on saithe
+
+mod<-gam(PA.mat~te(lon,lat,doy,bs='cr'),data=d[d$Year==2017&d$lat>57,],family='binomial')
+gam.check(mod)
+summary(mod)
+## quick play with knots indicates that the default captures things fine (not too many, high r2, lowest UBRE (gcv equivalent)
+## altho not lowest BIC. One with fewer knots had lowest BIC but low r2, hight UBRE
+
+## interesting to look at change in dist over doy
+doy<-sort(unique(d$doy[d$Year==2017&d$lat>57]))
+for(j in 1:length(doy)) {
+  vis.gam(mod,ticktype="detailed",color="heat",theta=25,cond=list(doy=doy[j]))
+  mtext(paste('Day of Year',doy[j]))
+  par(ask=T)
+}	 
+
+###-------------------------------
+## 1992 onwards has consistent data
+mod<-gam(PA.mat~te(lon,lat,doy,bs='cr'),data=d[d$Year==1992&d$lat>57,],family='binomial')
+gam.check(mod)
+summary(mod)
+
+## create a grid with lat-lon for the ICES rectangles >=57
+## predict doy effect
+## and year
+## append next year of data
+
+md<-expand.grid(lon=seq(),
+				lat=seq(),
+				doy=seq())
+
+
+mod<-gam(PA.mat~te(lon,lat,doy,bs='cr',k=c(6,6,4)),data=d[d$Year==1992&d$lat>57,],family='binomial');gam.check(mod);summary(mod)
