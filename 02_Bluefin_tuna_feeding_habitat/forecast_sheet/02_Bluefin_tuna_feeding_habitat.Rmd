@@ -1,0 +1,211 @@
+---
+title: "Bluefin Tuna Feeding Habitat Forecast"
+subtitle: 'ICES WGS2D Forecast sheet 02-20180917'
+output:
+  html_document: 
+    fig_caption: yes
+  word_document: 
+    fig_caption: yes
+    reference_docx: "../../common/word-styles-reference.docx"
+---
+
+```{r setup, include="FALSE"}
+#Configure Knitr
+knitr::opts_chunk$set(
+  echo=FALSE,
+	error = FALSE,
+	fig.width = 10,
+  fig.path="./figures/",
+	message = FALSE,
+	warning = FALSE,
+	include = TRUE,
+	results = "markup"
+)
+knitr::opts_knit$set(
+  root.dir="..")
+
+```
+
+```{r}
+htmltools::img(src = knitr::image_uri(file.path("..", "common","WGS2D_logo.png")), 
+               alt = 'logo', 
+               style = 'position:absolute; top:0; right:0; padding:10px;')
+```
+Issued 17-09-2018. Valid through to 31-08-2019. 
+
+Prepared by Mark R. Payne, DTU Aqua, Copenhagen, Denmark. 
+
+<!-- This forecast sheet superceeds the previous version 01-v02.1, issued 17-01-2018. For details, see the Change Log at the bottom of this document. -->
+
+This is the first forecast for the 2019 feeding season. The next update is planned on or before 15 October 2018.
+
+```{r }
+#  Setup
+#Configure markdown style, do house cleaning
+rm(list = ls(all.names=TRUE));  graphics.off();
+start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
+
+#Helper functions, externals and libraries
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(raster)
+library(lubridate)
+library(gridExtra)
+library(png)
+library(grid)
+library(viridisLite)
+
+#Configuration
+theme_set(theme_bw(base_size = 14))
+src.dir <- file.path("PredEng","scratch","Bluefin")
+sel.sp <- "South.of.Iceland"
+
+#Inline strings
+forecast.yr <- 2019
+most.recent.data <- "September 2018"
+lead.time <- "11 months"
+
+
+```
+
+## Forecast
+All forecast models considered suggest the absence of suitable habitat for bluefin tuna in the Denmark strait region in August August `r forecast.yr` (Figure 1). The total area of thermally suitable habitat in this region will be lower than the peaks seen in 2010 and 2012 (Figure 2). However, all models suggest that the the amount of habitat is expected to remain above that seen prior to the mid-1990s. 
+
+```{r Fig_Forecast_map,fig.cap="**Figure 1. Probability of a given region being thermally suitable feeding habitat  for bluefin tuna in August 2019.** *For each pixel, the probability of the sea surface temperatures being thermally suitable for Atlantic bluefin tuna (i.e. above 11 degree C) is estimated from the North American Multi-Model Ensemble (NMME). The contour line corresponding to a probability of 0.5, which has been used here to define the most likely limit of suitabe habitat, is plotted  as a heavy white line: all regions south and east of this line are likely to be suitable habitat.*"}
+load("outputs/Prob_forecast.RData")
+
+#Make plot
+library(viridisLite)
+dat <- data.frame(coordinates(prob.forecast),value=prob.forecast[]) %>%
+        filter(!is.na(value))
+ggplot(dat,aes(x,y,fill=value))+
+  geom_raster()+
+  scale_fill_viridis_c()+
+  coord_quickmap(expand=FALSE)+
+  annotation_map(map_data("world"))+
+  geom_contour(aes(z=value),breaks=0.5,col="white",size=2)+
+  labs(fill="Probability",x="",y="")
+
+```
+
+```{r Fig_Forecast_timeseries,fig.cap="**Figure 2. Time series of the area of suitable habitat.** *Interannual variability in the area of water warmer than 11°C during August in the Denmark Strait – Irminger Sea area east of Greenland is plotted from 1960–2020. The area of water >11 °C was estimated within the region 55–70°N and 50 –10 °W. In addition, the plot also shows the forecast area of habitat for August 2019 based on the forecasts from North America Multi-model Ensemble (NMME)  shown in Figure 1: the width of the area is related to the density of the predictions, while the heavy red dot is the ensemble mean prediction.*"}
+#Load data
+load(file.path(src.dir,"All_sumstats.RData"))
+
+all.ss$value <- all.ss$value/1e6
+ts.dat <- subset(all.ss,sp.subdomain==sel.sp & type=="Observations") 
+forecast.dat <- subset(all.ss,type=="NMME" & year(date)==2019 & sp.subdomain==sel.sp & name != "NMME-ensmean")
+forecast.ensmean <- subset(all.ss,type=="NMME" & year(date)==2019 & sp.subdomain==sel.sp & name == "NMME-ensmean")
+
+ggplot(ts.dat,aes(date,value))+
+  geom_line(aes(colour="Historical"))+geom_point(aes(colour="Historical"))+
+  geom_violin(data=forecast.dat,fill="lightblue",width=200)+
+  geom_point(data=forecast.ensmean,aes(colour="Forecast mean"),size=3)+
+  geom_point(data=forecast.ensmean,aes(colour="Forecast distrib."),shape=NA)+
+  scale_colour_manual(values=c("lightblue","red","black"))+
+  # scale_fill_manual(values=c("grey",NA))+
+  labs(x="",y="Area of suitable habitat (Mkm²)",colour="Legend")+
+   guides(colour = guide_legend(override.aes = list(shape = c(22,16,16),fill=c("lightblue",NA,NA),
+                                                    linetype=c(NA,NA,1))))+
+  scale_x_date(limits=as.Date(c("1960-01-01","2021-01-01")))
+
+
+```
+
+## Background
+
+An exploratory fishing survey for Atlantic mackerel performed in August 2012 in Denmark strait between Iceland and Greenland 
+captured three individual adult bluefin tuna (Thynnus thunnus) (MacKenzie et al. 2014). It is believed that this was the first such reported occurrence in this region in at least 370 years, and most likely ever. The tuna were captured in a single net-haul in 9-11º C water together with 6 tonnes of mackerel, which is a preferred prey species and itself a new immigrant to the area (Astthorsson et al., 2012). Regional temperatures in August 2012 were historically high and part of a warming trend since 1985, when temperatures began to rise. As a consequence, the area of relatively warm water (i. e., > 11 C) which could serve as potential habitat in this region has expanded by more than 800 000 km2, an area the size of France (Figure 2). The presence of bluefin tuna in this region is likely due to a combination of these warm temperatures that are physiologically more tolerable and immigration of an important prey species into the region. 
+
+Tuna are unique amongst fish in that they have the ability to regulate their body temperature and maintain a body temperature above the ambient water temperature, analogous to the physiological of mammals (although less efficient). The dynamics of this process have been well studied using data storage tags e.g. (Block et al., 2001; Walli et al., 2009) and show that, while feeding bluefin tuna can make forays into extremely cold water (down to 0 deg C), both laterally across fronts and vertically into deep water, they always need water of around 11 deg C or  warmer to return to “warm-up” again, especially during the nighttime when they cannot feed. This strict physiological requirement for access to warm “refuge” water ultimately places a constraint on their distribution and mirrors the results derived by other authors  (Muhling et al., 2017a, 2017b). Furthermore, given that 1) the surface layers are typically the warmest part of the ocean 2) sea surface temperature (SST) is readily observed from satellite and 3) SST is the most predictable marine variable, this would seem to be well suited for prediction.
+
+
+## Basis for Forecast 
+
+|Component | Description                                                 |
+-----------------|:-----------------------------------------------
+Biological model | Threshold of 11 degree C defining the minimum suitable temperature, based on MacKenzie et al 2014 and supported by Muhling et al 2017b. 
+Environmental data set(s) | HadISST (Rayner et al 2003)
+Environmental variables| Sea-surface temperature
+Environmental forecast method | Outputs from the North American Multi-model Ensemble (NMME) of seasonal forecast models (Kirtman et al)
+Forecast lead time | `r lead.time` (From  `r most.recent.data` to August `r forecast.yr`) |
+Table: **Table 1. Overview of the basis for the forecast.**
+
+
+## Quality Considerations
+
+An important point to make in the interpretation of these results is that the skill of these forecasts is inherently asymmetrical in nature. The presence of suitable thermal habitat in a region does not necessarily guarantee that it will be occupied by fish – other processes that are not encapsulated in this analysis, such as the presence of suitable prey, or even the abundance of bluefin tuna itself, can also be limiting, while the peculiarities of migration dynamics can also be important. On the other hand, the absence of suitable thermal habitat does guarantee the absence of fish – if the water is below their cold tolerance bluefin tuna will not enter, regardless of how much prey is present. In this way, our forecasts are essentially asymmetrical in nature – they are much better at predicting absence than presence – and should be interpreted with corresponding care.
+
+Secondly, our yearly estimates of the suitable habitat area (Figure 2)  integrate the local spatial variability in temperature that bluefin tuna might detect and perceive when in and near the region.  The forecast  of the area of suitable habitat (Figure 2) should therefore always be considered in conjunction with the spatial forecast (Figure 1).
+
+## Forecast Skill Assessment
+
+Forecast skill was assessed using historical data independent of those used in model development, for different time lags. The NMME forecast system outperforms a persistence forecast at lead times beyond approximately three months (Figure 3). 
+```{r Skill_assessment, fig.cap="**Figure 3. Skill assessment.** *The skill of the North America Multimodel Ensemble (NMME) in forecasting the area of suitable habitat in the Irminger Sea region as a function of leadtime is assessed. Model skill, represented as the correlation between the forecast and observed ara of habitat, is plotted as a function of lead time, in months after the forcast was initialised. Dotted thin lines correspond to the individual components of the NMME, while the heavy read line is the skill of the combined ensemble mean forecast. The persistence forcast (blue line) provides a baseline reference forecast by assuming the the observed anomalies will persist.*"}
+load(file.path(src.dir,"Skill_metrics.RData"))
+#Select NMME data 
+skill.sel <- subset(skill.m,sp.subdomain==sel.sp) %>% ungroup()
+NMME.s <- subset(skill.sel,type=="NMME" & name!="NMME-ensmean") %>%
+          mutate(lead=lead+0.5)
+ensmean.s <-subset(skill.sel,type=="NMME" & name=="NMME-ensmean") %>%
+          mutate(lead=lead+0.5)
+persis.s <- subset(skill.sel,type=="Persistence")
+
+#Plot!
+ggplot(mapping=aes(x=lead,y=cor,group=name))+
+  geom_line(data=NMME.s,aes(linetype="NMME",col="NMME"),size=0.5)+
+  geom_line(data=ensmean.s,aes(linetype="Ensmean",col="Ensmean"),size=2)+
+  geom_line(data=persis.s,aes(linetype="Persistence",col="Persistence"),size=1)+
+  coord_cartesian(xlim=c(0,12),ylim=c(0,1),expand=FALSE)+
+  scale_colour_manual(values=c("red","black","blue"))+
+  scale_linetype_manual(values=c("solid","dotted","solid"))+
+  guides(linetype=FALSE)+
+  labs(x="Lead time (months)",y="Correlation coefficient (r)",colour="")
+
+
+```
+
+
+## For More Information
+
+For more information, contact Mark R. Payne, DTU-Aqua, http://www.staff.dtu.dk/mpay. The latest version of this and other forecasts can be found on the website [fishforecasts.dtu.dk](http://fishforecasts.dtu.dk)  Code used to generate this forecast is available from the WGS2D GitHub repository, [https://github.com/ices-eg/wg_WGS2D](https://github.com/ices-eg/wg_WGS2D) in the directory "02_Bluefin_tuna_feeding_habitat".
+
+## Acknowledgements
+The research leading to these results has received funding from the European Union 7th Framework Programme (FP7 2007–2013) under grant agreement number 308299 (NACLIM) and the Horizon 2020 research and innovation programme under grant agreement number 727852 (Blue-Action). 
+
+## References
+
+* Block, B. A., Dewar, H., Blackwell, S. B., Williams, T. D., Prince, E. D., Farwell, C. J., … Fudge, D. (2001). Migratory movements, depth preferences, and thermal biology of Atlantic bluefin tuna. Science, 293(5533), 1310–1314. https://doi.org/10.1126/science.1061197
+
+* Kirtman, B. P., Min, D., Infanti, J. M., Kinter, J. L., Paolino, D. a., Zhang, Q., … Wood, E. F. (2014). The North American Multimodel Ensemble: Phase-1 Seasonal-to-Interannual Prediction; Phase-2 toward Developing Intraseasonal Prediction. Bulletin of the American Meteorological Society, 95(4), 585–601. https://doi.org/10.1175/BAMS-D-12-00050.1
+
+* MacKenzie, B. R., Payne, M. R., Boje, J., Høyer, J. L., and Siegstad, H. 2014. A cascade of warming impacts brings bluefin tuna to Greenland waters. Global Change Biology, 20: 2484–2491. http://onlinelibrary.wiley.com/doi/10.1111/gcb.12597/full 
+
+* Muhling, B. A., Lamkin, J. T., Alemany, F., García, A., Farley, J., Ingram, G. W., Berastegui, D. A., et al. 2017a. Reproduction and larval biology in tunas, and the importance of restricted area spawning grounds. Reviews in Fish Biology and Fisheries, 27: 697–732.
+
+* Muhling, B. A., Brill, R., Lamkin, J. T., Roffer, M. A., Lee, S. K., Liu, Y., and Muller-Karger, F. 2017b. Projections of future habitat use by Atlantic bluefin tuna: Mechanistic vs. correlative distribution models. ICES Journal of Marine Science, 74: 698–716. http://icesjms.oxfordjournals.org/lookup/doi/10.1093/icesjms/fsw215.
+
+* Rayner, N. A., Parker, D. E., Horton, E. B., Folland, C. K., Alexander, L. V., Rowell, D. P., Kent, E. C., et al. 2003. Global analyses of sea surface temperature, sea ice, and night marine air temperature since the late nineteenth century. Journal of Geophysical Research, 108: 4407. http://doi.wiley.com/10.1029/2002JD002670.
+
+
+* Walli, A., Teo, S. L. H., Boustany, A., Farwell, C. J., Williams, T., Dewar, H., … Block, B. A. (2009). Seasonal Movements, Aggregations and Diving Behavior of Atlantic Bluefin Tuna (Thunnus thynnus) Revealed with Archival Tags. PLoS ONE, 4(7), e6151. https://doi.org/10.1371/journal.pone.0006151
+
+## Change Log
+
+* 20180917 Initial version
+
+
+## License Information
+
+This work by Mark R. Payne is licensed under a  Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License. For details, see http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US Basically, this means that you are free to "share" and "remix" for non-commercial purposes as you see fit, so long as you "attribute" me for my contribution. Derivatives can be distributed under the same or similar license.
+
+This work comes with ABSOLUTELY NO WARRANTY or support.
+
+![](../../common/blue-action-logo.png)
+
+
+
+
+
+
