@@ -1,0 +1,211 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+editor_options: 
+  chunk_output_type: console
+---
+```{r echo=FALSE, eval=TRUE}
+library(TMB)
+#precompile()
+library(TMBhelper)
+library(reshape2)
+library(sp)
+library(mgcv)
+library(nlme)
+library(Matrix)
+library(plyr)
+library(ggplot2)
+library(rgeos)
+#library(raster)
+source("./src/utils.R")
+
+#Compile and load c++ code-------
+#code for linear+splines
+compile("./src/spde_mixture.cpp")
+dyn.load(dynlib("./src/spde_mixture"))
+
+#code for linear only
+compile("./src/spde_linear.cpp")
+dyn.load(dynlib("./src/spde_linear"))
+
+#code for splines only
+compile("./src/spde_splines.cpp")
+dyn.load(dynlib("./src/spde_splines"))
+
+#--------------------------------
+```
+
+
+## **Mackerel Egg Production modelling using the Tweedie distribution and the SPDE approach in Template Model Builder** 
+
+### Response to WGMEGS request
+WGMEGS requested WGS2D to .... (to copy request from agenda)
+
+#### Description of the situation
+In this study we use a latent Gaussian Random field to model mackerel egg production (EP) in the spawning grounds of NEA mackerel. We assume that EP follows a Tweedie distribution. The code is set up to be able to handle models that include only linear, only splines, or finally both linear and smoothed terms. 
+
+Summary of the data.
+
+```{r,echo=FALSE, comment=""}
+#Identify data source and check it is unique. Load it.
+RData.fnames <- dir("./data",pattern="*.RData",full.names = TRUE)
+if(length(RData.fnames)!=1) stop("Cannot find a single .RData file in ./data")
+load(RData.fnames)
+
+keep <- c("Year","Period","EP","depth","Temp","eastings","northings","psy4.npp")
+dat <- dat[, colnames(dat) %in% keep]
+
+if(any(is.na(dat))==T){print('NA values have been removed')
+  dat <- dat[!rowSums(is.na(dat)) > 0,]
+}
+
+
+shapefile.fnames <- dir("./objects",pattern="*.RData",full.names = TRUE)
+if(length(shapefile.fnames)!=1) stop("Cannot find a single .RData file in ./objects")
+load(shapefile.fnames)
+
+df <- dat 
+coordinates(df) <- ~eastings+northings
+df@proj4string <- ocean.refined@proj4string
+
+rm(dat)
+df$Year <- factor(df$Year)
+```
+* `EP` is the response variable
+* `utm_x,utm_y`are the Universal Tranverse Mercator transformed coordinates (UTM32) in kilometers
+* Remaining variables are covariates.
+
+***
+## Models tested
+
+```{r,echo=TRUE}
+#First choose the max edge
+max_edge=90 #(in km)
+
+#Create a list of candidate models
+
+models <- list()
+models$linear_noGMRF <- list()
+models$linear_noGMRF$gam_setup = gam(EP ~ depth + Temp + psy4.npp
+                                      ,data = df@data, fit=FALSE)
+
+models$splines_noGMRF <- list()
+models$splines_noGMRF$gam_setup = gam(EP ~
+                                        s(depth, bs = "cs") +
+                                        s(Temp, bs = "cs") +
+                                        s(psy4.npp, bs = "cs"),
+                                      data = df@data, fit=FALSE)
+
+models$linear_GMRF <- list()
+models$linear_GMRF$gam_setup = models$linear_noGMRF$gam_setup
+
+
+models$splines_GMRF <- list()
+models$splines_GMRF$gam_setup = models$splines_noGMRF$gam_setup
+ 
+
+for(j in 1:length(models)) {
+  source("./src/MEGS.R")
+  models[[j]]$results$fitted <- models[[j]]$results$obj$report()$mu
+  models[[j]]$results$AIC <- TMBAIC(models[[j]]$results$opt)
+}
+```
+
+#Table of likelihoods
+```{r,echo=FALSE}
+
+AIC_df <- ldply(.data = models, function(x) {
+  c(AIC=x$results$AIC,
+    Likelihood=x$results$opt$objective,
+    Time=x$results$timeUsed)
+  })
+names(AIC_df) <- c('Model type','AIC','Likelihood','Time used')
+AIC_df
+```
+
+#Model results 
+```{r,echo=FALSE}
+best_model <- which(AIC_df[,'AIC']==min(AIC_df[,'AIC']))
+#to bypass the automatic best model selection select the desired model manually by uncommenting the line below
+#best_model <- 3
+final_model <- models[[best_model]]
+final_model$name <- AIC_df[best_model,1]
+final_model$results$opt
+final_model$results$rep
+if (grepl('noGMRF',final_model$name)==TRUE) #this means the best model doesn't contain a GMRF
+  { rangeIndex = NULL
+    range = 'The model does not contain a GMRF'
+    } else {
+      rangeIndex = which(row.names(summary(final_model$results$rep,"report"))=="range")
+      range = summary(final_model$results$rep,"report")[rangeIndex,]}
+#fieldIndex = which(row.names(summary(rep,"report"))=="x")
+print('Range parameter estimate is:')
+range
+```
+
+#Fitted vs Observed
+```{r,echo=FALSE}
+#par(mfrow=c(1,1))
+par(mfrow=c(2,nrow(AIC_df)/2))
+for(j in 1:nrow(AIC_df)) {
+plot(df$EP~models[[j]]$results$fitted, main=names(models)[[j]], ylab='observed', xlab='fitted'
+     #, xlim=c(0,40), ylim=c(0,40)
+     )
+abline(a = 0, b = 1, col = "red")
+}
+```
+
+#Plots of the GMRF
+```{r,echo=FALSE}
+if (grepl('noGMRF',final_model$name)==TRUE) #this means the best model doesn't contain a GMRF
+  { range # i.e. print message that the model doesn't contain a GMRF
+  } else {
+    proj = inla.mesh.projector(mesh, dims = c(100,100), xlim=range(outer_boundary$loc[,1]), ylim=range(outer_boundary$loc[,2]))
+    latentFieldMAP = final_model$results$rep$par.random[names(final_model$results$rep$par.random)=="x"] / exp(final_model$results$rep$par.fixed[which(names(final_model$results$rep$par.fixed)=="log_tau")])
+
+par(mfrow=c(1,2))
+image.plot(proj$x,proj$y, exp(inla.mesh.project(proj, latentFieldMAP)),col =  colorRampPalette(c("white","yellow", "red"))(12),
+           xlab = 'Easting', ylab = 'Northing',
+           main = "MAP estimate of the GMRF",
+           cex.lab = 1.1,cex.axis = 1.1, cex.main=1, cex.sub= 1.1)
+#contour(proj$x, proj$y,inla.mesh.project(proj, latentFieldMAP) ,add = T,labcex  = 1,cex = 1)
+#plot(land_fine,add=T, col='grey')
+
+latentFieldSD = sqrt(final_model$results$rep$diag.cov.random[names(final_model$results$rep$par.random)=="x"])/exp(final_model$results$rep$par.fixed[which(names(final_model$results$rep$par.fixed)=="log_tau")])
+image.plot(proj$x,proj$y, exp(inla.mesh.project(proj, latentFieldSD)),col =  colorRampPalette(c("white","yellow", "red"))(12),
+           xlab = 'Easting', ylab = 'Northing',
+           main = "SD estimate of the GMRF",
+           cex.lab = 1.1,cex.axis = 1.1, cex.main=1, cex.sub= 1.1)
+#contour(proj$x, proj$y,inla.mesh.project(proj, latentFieldSD) ,add = T,labcex  = 1,cex = 1)
+#plot(land_fine,add=T, col='grey')
+      }
+```
+
+#Plot splines
+```{r echo=FALSE}
+if(grepl('splines|mixture', final_model$name)){
+#muSpline <- sdSpline <- list()
+muSpline = final_model$results$muSpline
+#muSpline = muSpline[1:(length(muSpline)-(length(pred_df)*nrow(pred_df[[1]])))]
+muSpline = split(muSpline, ceiling(seq_along(muSpline)/nrow(pred_df[[1]])))
+sdSpline = final_model$results$sdSpline
+#sdSpline = sdSpline[1:(length(sdSpline)-(length(pred_df)*nrow(pred_df[[1]])))]
+sdSpline = split(sdSpline, ceiling(seq_along(sdSpline)/nrow(pred_df[[1]])))
+
+par(mfrow=c(length(pred_df)/2,2))
+for(i in 1:length(pred_df)){
+  #i=1
+  ylim.down = min(muSpline[[i]] - 1.96*sdSpline[[i]])
+  ylim.up = max(muSpline[[i]] + 1.96*sdSpline[[i]])
+plot(pred_df[[i]][,1], muSpline[[i]], lty=1,type = 'l', ylim = c(ylim.down,ylim.up),
+     xlab = names(pred_df[[i]]), ylab = paste0("f(",names(pred_df[[i]]),")"),
+     main = paste0("Spline for ", names(pred_df[[i]])))
+lines(pred_df[[i]][,1], muSpline[[i]] - 1.96*sdSpline[[i]], lty=2)
+lines(pred_df[[i]][,1], muSpline[[i]] + 1.96*sdSpline[[i]], lty=2)
+abline(h = 0)
+  }
+}
+
+
+```
