@@ -90,7 +90,7 @@ prob.b <- brick(prob.l)
 prob.forecast <- mean(prob.b,na.rm=TRUE)
 
 #Save results
-save(prob.forecast,file="outputs/Prob_forecast.RData")
+save(prob.forecast,clim.r,file="outputs/Prob_forecast.RData")
 
 #'========================================================================
 # Complete ####
