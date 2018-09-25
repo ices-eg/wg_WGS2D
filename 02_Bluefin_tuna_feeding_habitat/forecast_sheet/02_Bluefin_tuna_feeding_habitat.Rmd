@@ -98,23 +98,25 @@ ggplot(dat,aes(x,y,fill=value))+
 #Load data
 load(file.path(src.dir,"All_sumstats.RData"))
 
-all.ss$value <- all.ss$value/1e6
+all.ss <- mutate(all.ss,
+                 value=value/1e6,
+                 year=year(date))
 ts.dat <- subset(all.ss,sp.subdomain==sel.sp & type=="Observations") 
 forecast.dat <- subset(all.ss,type=="NMME" & year(date)==forecast.yr & sp.subdomain==sel.sp & name != "NMME-ensmean")
 forecast.ensmean <- subset(all.ss,type=="NMME" & year(date)==forecast.yr & sp.subdomain==sel.sp & name == "NMME-ensmean")
 
-ggplot(ts.dat,aes(date,value))+
+ggplot(ts.dat,aes(year,value))+
   geom_line(aes(colour="Historical"))+geom_point(aes(colour="Historical"))+
-  geom_violin(data=forecast.dat,fill="lightblue",width=200)+
+  geom_violin(data=forecast.dat,fill="lightblue")+
   geom_point(data=forecast.ensmean,aes(colour="Forecast mean"),size=3)+
   geom_point(data=forecast.ensmean,aes(colour="Forecast distrib."),shape=NA)+
   scale_colour_manual(values=c("lightblue","red","black"))+
   # scale_fill_manual(values=c("grey",NA))+
-  labs(x="",y="Area of suitable habitat (Mkm²)",colour="Legend")+
+  labs(x="",y="Area of summer thermal habitat (Mkm²)",colour="Legend")+
    guides(colour = guide_legend(override.aes = list(shape = c(22,16,16),fill=c("lightblue",NA,NA),
                                                     linetype=c(NA,NA,1))))+
-  scale_x_date(limits=as.Date(c("1960-01-01","2021-01-01")))
-
+  scale_x_continuous(limits=c(1960,2020))
+  #scale_x_date(limits=as.Date(c("1960-01-01","2021-01-01")))
 
 ```
 
