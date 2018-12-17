@@ -49,9 +49,9 @@ mdl.fname <- "models/GAM_model.RData"
 bath.fname <- "objects/bathymetry.RData"
 
 #Prediction variables
-pred.consts <- data.frame(doy=105,             # April 15 is the 105th day of the year 
+pred.consts <- expand.grid(doy=seq(30,180,by=1),             
                       theta=0)            #Solar angle corresponds to sunrise/sunset
-
+pred.sel.doy <- c(105) # April 15 is the 105th day of the year 
 
 #==========================================================================
 # Setup for predictions
@@ -67,6 +67,9 @@ files.df$year <- gsub("^.*\\.([0-9]{4})[0-9]{2}\\..*$","\\1",basename(files.df$p
 
 #But only process those that are missing from the output
 process.files <- subset(files.df,!file.exists(files.df$pred.fname) & year %in% years.ROI)
+if(nrow(process.files)==0) {
+  stop("No files to process!")
+}
 
 #Create a latitude raster
 lat.rast <- log10bath
@@ -88,13 +91,22 @@ for(i in seq(nrow(process.files))) {
   pred.dat <- brick(list(latitude=crop(lat.rast,sal.b),
                          logdepth=crop(log10bath,sal.b),
                          Sspawn=sal.b))
+
+  #Now, we're ready to predict. Loop over day of year
+  pred.l <- list()
+  for(i in seq(nrow(pred.consts))) {
+    pred.l[[i]] <- predict(pred.dat, bw.model,const=pred.consts[i,],type="response")
+  }
   
-  #Now, we're ready to predict
-  pred <- predict(pred.dat, bw.model,const=pred.consts,type="response")
-  crs(pred) <-"+proj=longlat"
-  
+  #Process results
+  sel.doy.idx <- which(pred.consts$doy==pred.sel.doy)
+  sel.b <- pred.l[[sel.doy.idx]]
+  pred.b <- brick(pred.l)
+  rtn <- brick(list(mean=mean(pred.b),max=max(pred.b),sel=sel.b))  
+  crs(rtn) <-"+proj=longlat"
+
   #Save output
-  writeRaster(pred,file=f$pred.fname,overwrite=TRUE)
+  writeRaster(rtn,file=f$pred.fname,overwrite=TRUE)
 
 }
 
