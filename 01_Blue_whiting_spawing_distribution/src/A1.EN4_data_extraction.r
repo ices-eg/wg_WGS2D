@@ -56,6 +56,9 @@ wt.vertical.ave <- FALSE   #Do the vertical averaging with weighted means? Or si
 #==========================================================================
 # Process EN4 files
 #==========================================================================
+#Check
+if(length(EN4.vars)!=1) stop("Cannot process multiple variables (yet)")
+
 #Get list of files
 EN4.db <- data.frame(fname=dir(EN4.db.dir,pattern="zip$|nc$",full.names = TRUE))
 EN4.db$year <- gsub(".*\\.([0-9]{4})[0-9]*\\..*$","\\1",EN4.db$fname)
@@ -96,30 +99,31 @@ for(f in EN4.to.process$fname) {
     nc_close(ncid)
 
     #Loop over variables
-    for(v in EN4.vars) {
-      log.msg("%s...",v)
-      #Process using raster
-      b.raw <- brick(g.path,varname=v,lvar=4)
-      #Drop vertical layers that we don't need
-      b <- b.raw[[EN4.layers]]
-      #Average in the vertical
-      if(wt.vertical.ave) {
-        b <- weighted.mean(b,layer.thickness[EN4.layers])
-      } else {
-        b <- mean(b,na.rm=TRUE)
-      }
-      #For cases where we are shallower than the shallowest layer, we use the bottom salinity
-      bottom.idx <- sum(!is.na(b.raw))
-      bottom.val <- stackSelect(b.raw,bottom.idx,type="index")
-      b <- cover(b,bottom.val)   #Replaces NAs in b with bottom values
-      #Rotate x-axes  #Rotating can be very slow, so its best to leave it to as late as possible
-      b <- rotate(b)
-      #Now subset spatially
-      b <- crop(b,spatial.ROI)
-      #Write the raster out for further use
-      fname <- gsub("nc$",sprintf("%s.nc",v),g)
-      writeRaster(b,filename = file.path(EN4.data.dir, fname),overwrite=TRUE)
+    #If necessary to extract multiple variables loop, this is where we would do it
+    v <- EN4.vars
+    log.msg("%s...",v)
+    #Process using raster
+    b.raw <- brick(g.path,varname=v,lvar=4)
+    #Drop vertical layers that we don't need
+    b <- b.raw[[EN4.layers]]
+    #Average in the vertical
+    if(wt.vertical.ave) {
+      b <- weighted.mean(b,layer.thickness[EN4.layers])
+    } else {
+      b <- mean(b,na.rm=TRUE)
     }
+    #For cases where we are shallower than the shallowest layer, we use the bottom salinity
+    bottom.idx <- sum(!is.na(b.raw))
+    bottom.val <- stackSelect(b.raw,bottom.idx,type="index")
+    b <- cover(b,bottom.val)   #Replaces NAs in b with bottom values
+    #Rotate x-axes  #Rotating can be very slow, so its best to leave it to as late as possible
+    b <- rotate(b)
+    #Now subset spatially
+    b <- crop(b,spatial.ROI)
+    #Write the raster out for further use
+    fname <- paste0("extr_",g)
+    writeRaster(b,filename = file.path(EN4.data.dir, fname),overwrite=TRUE)
+    
     #Make some space by deleting the file
     file.remove(file.path(tmp.dir,g))
     log.msg("Done.\n")

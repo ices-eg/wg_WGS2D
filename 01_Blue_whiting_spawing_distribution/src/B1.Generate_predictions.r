@@ -106,7 +106,7 @@ for(i in seq(nrow(process.files))) {
   crs(rtn) <-"+proj=longlat"
 
   #Save output
-  writeRaster(rtn,file=f$pred.fname,overwrite=TRUE)
+  writeRaster(rtn,file=f$pred.fname,overwrite=TRUE,bylayer=TRUE,suffix=names(rtn))
 
 }
 
