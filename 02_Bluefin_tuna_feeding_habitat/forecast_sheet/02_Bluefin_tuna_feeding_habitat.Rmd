@@ -4,12 +4,15 @@ subtitle: 'ICES WGS2D Forecast sheet 02-20180917'
 output:
   html_document: 
     fig_caption: yes
+    outputfile: test.html
   word_document: 
     fig_caption: yes
     reference_docx: "../../common/word-styles-reference.docx"
 ---
 
 ```{r setup, include="FALSE"}
+this.issue <- "17-09-2018"
+
 #Configure Knitr
 knitr::opts_chunk$set(
   echo=FALSE,
@@ -23,6 +26,8 @@ knitr::opts_chunk$set(
 )
 knitr::opts_knit$set(
   root.dir="..")
+
+
 
 ```
 
@@ -46,6 +51,7 @@ rm(list = ls(all.names=TRUE));  graphics.off();
 start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
 
 #Helper functions, externals and libraries
+library(tidyverse)
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -72,25 +78,33 @@ lead.time <- "11 months"
 ## Forecast
 All forecast models suggest the absence of suitable habitat for bluefin tuna in the Denmark strait region in August `r forecast.yr` (Figure 1): however, the models forecast expanded habitat around the Rekyjanes ridge area and in the central Norwegian sea when compared to the long-term mean. The total area of thermally suitable habitat in this region will be lower than the peaks seen in 2010 and 2012 (Figure 2), although the amount of habitat is expected to remain above that seen prior to the mid-1990s.
 
-```{r Fig_Forecast_map,fig.cap="**Figure 1. Probability of a given region being thermally suitable feeding habitat  for bluefin tuna in August 2019.** *For each pixel, the probability of the sea surface temperatures being thermally suitable for Atlantic bluefin tuna (i.e. above 11 degree C) is estimated from the North American Multi-Model Ensemble (NMME). The contour line corresponding to a probability of 0.5, which has been used here to define the most likely limit of suitabe habitat, is plotted  as a heavy blue line, while the average habitat boundary (1983-2005) is plotted with a red line. All regions south and east of these lines are classified as suitable habitat.*"}
+```{r Fig_Forecast_map,fig.cap="**Figure 1. Probability of a given region being thermally suitable feeding habitat  for bluefin tuna in August 2019.** *For each pixel, the probability of the sea surface temperatures being thermally suitable for Atlantic bluefin tuna (i.e. above 11 degree C) is estimated from the North American Multi-Model Ensemble (NMME). The contour line corresponding to a probability of 0.5, which has been used here to define the most likely limit of suitabe habitat, is plotted  as a heavy blue line, while the historical minimum and maximum habitat boundaries (1960-2015) are plotted as red lines.*"}
 load("outputs/Prob_forecast.RData")
+load("outputs/Habitat.variability.RData")
 
 #Make plot
 library(viridisLite)
-dat <- data.frame(coordinates(prob.forecast),value=prob.forecast[]) %>%
-        filter(!is.na(value))
-clim.dat <- data.frame(coordinates(clim.r),value=clim.r[]) %>%
-        filter(!is.na(value))
+dat <- rasterToPoints(prob.forecast) %>% as.tibble()
+clim.dat <- rasterToPoints(clim.r) %>% as.tibble()
+range.extent <- rasterToPoints(hab.range) %>% as.tibble()
 
-ggplot(dat,aes(x,y,fill=value))+
-  geom_raster()+
+guide.cols <- c("blue1","red","red")
+guide.linetype <- c("solid","solid","dashed")
+forecast.text <- sprintf("%i forecast",forecast.yr)
+ggplot(dat,aes(x,y))+
+  geom_raster(aes(fill=layer))+
   scale_fill_viridis_c()+
   coord_quickmap(expand=FALSE)+
   annotation_map(map_data("world"))+
-  geom_contour(data=clim.dat,aes(z=value,col="Mean"),breaks=11)+
-  geom_contour(aes(z=value,col=as.character(forecast.yr)),breaks=0.5,size=2)+
-  labs(fill="Habitat\nProbability",x="",y="",colour="Habitat\nBoundary")+
-  scale_colour_manual(values=c("blue1","red"))
+  #geom_contour(data=clim.dat,aes(z=value,col="Mean"),breaks=11)+
+  geom_contour(data=range.extent,aes(z=min.extent,col="Hist. min.",linetype="Hist. min."),breaks=0.5,size=0.5)+
+  geom_contour(data=range.extent,aes(z=max.extent,col="Hist. max.",linetype="Hist. max."),breaks=0.5,size=0.5)+
+  geom_contour(aes(z=layer,col=forecast.text,linetype=forecast.text),breaks=0.5,size=2)+
+  labs(fill=sprintf("Prob. of\nsuitable\nhabitat, %i",forecast.yr),x="",y="",colour="Habitat\nBoundary",linetype="Habitat\nBoundary")+
+  guides(lintype=NA,
+         colour = guide_legend(override.aes = list(colour=guide.cols,linetype=guide.linetype,size=0.5)))+
+  scale_colour_manual(values=guide.cols)+
+  scale_linetype_manual(values=guide.linetype)
 
 ```
 
@@ -123,11 +137,11 @@ ggplot(ts.dat,aes(year,value))+
 ## Background
 
 An exploratory fishing survey for Atlantic mackerel performed in August 2012 in Denmark strait between Iceland and Greenland 
-captured three individual adult bluefin tuna (Thynnus thunnus) (MacKenzie et al. 2014). It is believed that this was the first such reported occurrence in this region in at least 370 years, and most likely ever. The tuna were captured in a single net-haul in 9-11º C water together with 6 tonnes of mackerel, which is a preferred prey species and itself a new immigrant to the area (Astthorsson et al., 2012). Regional temperatures in August 2012 were historically high and part of a warming trend since 1985, when temperatures began to rise. As a consequence, the area of relatively warm water (i. e., > 11 C) which could serve as potential habitat in this region has expanded by more than 800 000 km2, an area the size of France (Figure 2). The presence of bluefin tuna in this region is likely due to a combination of these warm temperatures that are physiologically more tolerable and immigration of an important prey species into the region. 
+captured three individual adult bluefin tuna (Thynnus thunnus) (MacKenzie et al. 2014). It is believed that this was the first such reported occurrence in this region in at least 370 years, and most likely ever. The tuna were captured in a single net-haul in 9-11º C water together with 6 tonnes of mackerel, which is a preferred prey species and itself a new immigrant to the area (Astthorsson et al., 2012). Regional temperatures in August 2012 were historically high and part of a warming trend since 1985, when temperatures began to rise. As a consequence, the area of relatively warm water (i. e., > 11 C) which could serve as potential habitat in this region has expanded by more than 800 000 km2, an area the size of France (Figure 2, 3). The presence of bluefin tuna in this region is likely due to a combination of these warm temperatures that are physiologically more tolerable and immigration of an important prey species into the region. 
 
 <center>
 
-![**Figure 3. 2012 Observation of bluefin tuna in Denmark strait.** *Sea surface temperature (SST) based on the Operational Sea Surface Temperature and Sea Ice Analysis (OSTIA) product (Donlon et al., 2012) for August 22, 2012 in the east Greenland-Iceland area of the north Atlantic Ocean. A white star marks the location of the haul (65°420N, 30°500W) which captured three bluefin tuna (Thunnus thynnus) using pelagic fishing gear during exploratory scientifically monitored fishing for mackerel (Scomber scombrus). Depth contours are drawn at 200 m (thin line) and 1000 m (thick line). Reproduced from MacKenzie et al 2014.*](../resources/MacKenzie_2014.png)
+![**Figure 3. 2012 Observation of bluefin tuna in Denmark strait.** *Proportion of years where Sea surface temperature (SST) >11 °C for (a) 1985–1994 (first decade of time series) and (b) 2007–2011 (5 years prior to capture). The contour line shows location of the 11 °C isotherm for 2012. Data source for SST is satellite imagery [Operational Sea Surface Temperature and Sea Ice Analysis (OSTIA) product; Donlon et al., 2012]. The position of the haul that caught three bluefin tuna on August 22, 2012 is shown as a white star near 65°N, 30°W. Reproduced from MacKenzie et al 2014.*](../resources/MacKenzie_2014_distrib.png)
 
 </center>
 
