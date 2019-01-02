@@ -105,9 +105,8 @@ for(i in seq(nrow(process.files))) {
   rtn <- brick(list(mean=mean(pred.b),max=max(pred.b),sel=sel.b))  
   crs(rtn) <-"+proj=longlat"
 
-  #Save output
+  #Save output to temp file
   writeRaster(rtn,file=f$pred.fname,overwrite=TRUE,bylayer=TRUE,suffix=names(rtn))
-
 }
 
 #==========================================================================
