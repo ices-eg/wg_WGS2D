@@ -1,6 +1,6 @@
 ---
 title: "Blue Whiting Spawning Habitat Forecast"
-subtitle: 'ICES WGS2D Forecast sheet 01-20190107'
+subtitle: 'ICES WGS2D Forecast sheet 01-20190103'
 output:
   html_document: 
     fig_caption: yes
@@ -31,7 +31,7 @@ htmltools::img(src = knitr::image_uri(file.path("..", "common","WGS2D_logo.png")
                alt = 'logo', 
                style = 'position:absolute; top:0; right:0; padding:10px;')
 ```
-Issued 07-01-2019. Valid through to 01-06-2019. 
+Issued 03-01-2019. Valid through to 01-06-2019. 
 
 Prepared by Mark R. Payne, DTU Aqua, Copenhagen, Denmark. 
 
@@ -211,7 +211,7 @@ Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawn
 
 ## Change Log
 
-* 20190107 Updated. Forecast verification for 2018 included.
+* 20190103 Updated. Forecast verification for 2018 included.
 * 20180831 Updated to 2019 forecast.
 * 20180301.v03.0 Updated EN4 data set to 4.2.1. Added forecast expressed as an anomaly. Added "forecast basis" summary table. Added supplementary information comparing with survey track and current oceanographic state. Add PSY4 reanalysis product into mix.
 * 20180117.v02.1 Minor update to include salinity contours in Figure 2.
@@ -224,7 +224,7 @@ Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawn
 A further indication of the performance of the forecast system can be gained by comparing the forecasts issued previously with the actual observations. We have compared the forecast issued in January 2018 with the corresponding distribution observed in the International Blue Whiting Spawning Stock (IBWSS) survey performed in March 2018 (Figure S1.1).  
 
 
-```{r Performance,fig.cap="**Figure S1.1. 2018 forecast verification** *Comparison of forecast habitat and observed distribution for the 2018 spawning season. The forecast spawning habitat is reproduced from the January 2018 WGS2D forecast (Forecast sheet 001-v02.1) and is represented as coloured areas, corresponding to the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder. Acoustic density (sA values) observed in 2018 IBWSS survey are plotted as symbols, corresponding to absence, low (sA < 1000), medium (1000 < sA < 2000) and high (sA > 2000) densities. The 1000m and 2000m isobaths are added for reference.*"}
+```{r Performance,fig.cap="**Figure S1.1. 2018 forecast verification** *Comparison of forecast habitat and observed distribution for the 2018 spawning season. The forecast spawning habitat is reproduced from the January 2018 WGS2D forecast (Forecast sheet 001-v02.1) and is represented as coloured areas, corresponding to the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder. Acoustic density (sA values) observed in 2018 IBWSS survey are plotted as circles whose area is proportional to the sA value – crosses indicate absence of blue whiting. The 1000m and 2000m isobaths are added for reference.*"}
 #Setup forecast data
 fname.forecast <- "pred.EN.4.2.0.p.analysis.g10.201710.salinity.nc"
 forecast.r <- raster(file.path("forecast_sheet","resources",fname.forecast))

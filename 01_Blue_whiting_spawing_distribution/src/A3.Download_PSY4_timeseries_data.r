@@ -48,46 +48,75 @@ library(stringr)
 #==========================================================================
 # Configure
 #==========================================================================
-#Model name
-mdl.name <- "PSY4V3R1"
-
 #Time series script
-ts.script <- 'python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> --motu http://nrtcmems.mercator-ocean.fr/motu-web/Motu --service-id GLOBAL_ANALYSIS_FORECAST_PHY_001_024-TDS --product-id global-analysis-forecast-phy-001-024-monthly --longitude-min -180 --longitude-max 179.91667175293 --latitude-min -80 --latitude-max 90 --date-min "2007-01-16 12:00:00" --date-max "2018-01-16 12:00:00" --depth-min 186.1255 --depth-max 763.3333 --variable so -out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>'
+PSY4.script <- paste("python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> ",
+                     "--motu http://nrt.cmems-du.eu/motu-web/Motu --service-id GLOBAL_ANALYSIS_FORECAST_PHY_001_024-TDS ",
+                     "--product-id global-analysis-forecast-phy-001-024-monthly --longitude-min -180 ",
+                     "--longitude-max 179.9166717529297 --latitude-min -80 --latitude-max 90 ",
+                     #--date-min "2018-11-16 00:00:00" --date-max "2018-11-16 00:00:00" 
+                     "--depth-min 0.493 --depth-max 0.4942 --variable so --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>")
+  
+CORIOLIS.OA.script <- paste("python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> ",
+                         "--motu http://nrt.cmems-du.eu/motu-web/Motu --service-id INSITU_GLO_TS_OA_NRT_OBSERVATIONS_013_002_a-TDS ",
+                         "--product-id CORIOLIS-GLOBAL-NRTOA-OBS_TIME_SERIE --longitude-min -180 --longitude-max 179.5",
+                         "--latitude-min -77.0104751586914 --latitude-max 89.8962631225586 ",
+                         #--date-min "2018-09-15 00:00:00" --date-max "2018-09-15 00:00:00" 
+                         "--depth-min -1 --depth-max 1 --variable PSAL --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>")
 
+
+#"python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> --motu http://my.cmems-du.eu/motu-web/Motu --service-id INSITU_GLO_TS_OA_REP_OBSERVATIONS_013_002_b-TDS --product-id CORIOLIS-GLOBAL-CORA05.0-OBS_FULL_TIME_SERIE --longitude-min -180 --longitude-max 179.5 --latitude-min -77.0104751586914 --latitude-max 89.8962631225586 --date-min "2015-11-15 00:00:00" --date-max "2015-11-15 00:00:00" --depth-min -1 --depth-max 1 --variable PSAL --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>
+  
+
+ts.scripts <- list("PSY4V3R1"=PSY4.script,CORIOLIS.OA=CORIOLIS.OA.script)
+  
 #Misc
-motu.client <- "objects/motu-client-python/motu-client.py"
+motu.client <- "objects/motu-client-python/motuclient.py"
 
 #==========================================================================
 # Download time series data 
 #==========================================================================
-#Setup
-ts.cfg <- parse.CMEMS.script(ts.script)
-ts.cfg <- update(ts.cfg,
-                 depth.min="Surface",
-                 script=motu.client,
-                 out.dir=file.path(PSY4.data.dir,"database"))
+#Parse scripts
+CMEMS.cfgs <- lapply(ts.scripts,parse.CMEMS.script)
 
-#Get the list of available time steps for this product
-timesteps <- product.description(ts.cfg,"times")
 
-#See what is already available in the database
-db.fnames <- dir(PSY4.data.dir,full.names = TRUE,pattern="nc$")
-db.meta <- tibble(fname=db.fnames,
-                    date=ymd(str_extract(db.fnames,"[0-9]{8}")))
-
-#Select missing timesteps
-missing.timesteps <- subset(timesteps,!as.Date(timesteps) %in% db.meta$date )
-
-#Loop over individual timesteps
-for(t in missing.timesteps) {
-  output.fname <- sprintf("%s_%s.nc",mdl.name,format(as.Date(t),"%Y%m%d"))
-  ts.cfg <- update(ts.cfg,out.name=output.fname)
-  CMEMS.download(ts.cfg,ROI=spatial.ROI,date.min=t,date.max=t)
+for(mdl.name in names(ts.scripts)) {
+  log.msg("Now downloading %s...\n",mdl.name)
+  #Setup
+  ts.cfg <- update(CMEMS.cfgs[[mdl.name]],
+                   depth.min="Surface",
+                   script=motu.client,
+                   out.dir=file.path("data",mdl.name,"database"),
+                   date.max=NULL,date.min=NULL)
+  
+  CMEMS.download(ts.cfg,ROI=spatial.ROI,debug=TRUE)
+  
+  
+  # #Get the list of available time steps for this product
+  # timesteps <- product.description(ts.cfg,"times")
+  # 
+  # #See what is already available in the database
+  # db.fnames <- dir(PSY4.data.dir,full.names = TRUE,pattern="nc$")
+  # db.meta <- tibble(fname=db.fnames,
+  #                   date=ymd(str_extract(db.fnames,"[0-9]{8}")))
+  # 
+  # #Select missing timesteps
+  # missing.timesteps <- subset(timesteps,!as.Date(timesteps) %in% db.meta$date )
+  # 
+  # 
+  # #Loop over individual timesteps
+  # for(t in missing.timesteps) {
+  #   output.fname <- sprintf("%s_%s.nc",mdl.name,format(as.Date(t),"%Y%m%d"))
+  #   ts.cfg <- update(ts.cfg,out.name=output.fname)
+  #   CMEMS.download(ts.cfg,ROI=spatial.ROI,date.min=t,date.max=t)
+  # }
 }
+
 
 #==========================================================================
 # Complete
 #==========================================================================
+#Save 
+
 #Turn off the lights
 if(grepl("pdf|png|wmf",names(dev.cur()))) {dmp <- dev.off()}
 log.msg("\nAnalysis complete in %.1fs at %s.\n",proc.time()[3]-start.time,base::date())
