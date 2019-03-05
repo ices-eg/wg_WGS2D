@@ -40,6 +40,7 @@ log.msg <- function(fmt,...) {cat(sprintf(fmt,...));
   flush.console();return(invisible(NULL))}
 
 source("src/00.Common_elements.r")
+library(tidyverse)
 
 #==========================================================================
 # Configure
@@ -53,6 +54,8 @@ pred.consts <- expand.grid(doy=seq(30,180,by=1),
                       theta=0)            #Solar angle corresponds to sunrise/sunset
 pred.sel.doy <- c(105) # April 15 is the 105th day of the year 
 
+EN4.ex.dir <- file.path(EN4.data.dir,"extraction")
+
 #==========================================================================
 # Setup for predictions
 #==========================================================================
@@ -61,13 +64,17 @@ load(mdl.fname)
 load(bath.fname)
 
 #Get list of EN4 files to predict for
-files.df <- data.frame(salinity=dir(EN4.data.dir,pattern=".*salinity.*",full.names=TRUE))
-files.df$pred.fname <- file.path(pred.dir,sprintf("pred.%s",basename(files.df$salinity)))
-files.df$year <- gsub("^.*\\.([0-9]{4})[0-9]{2}\\..*$","\\1",basename(files.df$pred.fname))
+files.df <- tibble(EN4.ex=dir(EN4.ex.dir,full.names=TRUE),
+                   EN4.ex.file.date=file.mtime(EN4.ex),
+                   date=gsub(".*\\.([0-9]{6})\\.nc$$","\\1",EN4.ex),
+                   pred.fname=file.path(pred.dir,sprintf("%s.nc",date)),
+                   pred.file.exists=file.exists(pred.fname),
+                   pred.file.date=file.mtime(pred.fname))
 
 #But only process those that are missing from the output
-process.files <- subset(files.df,!file.exists(files.df$pred.fname) & year %in% years.ROI)
-if(nrow(process.files)==0) {
+process.files <- filter(files.df,!pred.file.exists | EN4.ex.file.date > pred.file.date)
+n.to.process <- nrow(process.files)
+if(n.to.process==0) {
   stop("No files to process!")
 }
 
@@ -78,11 +85,14 @@ lat.rast[] <- yFromCell(lat.rast,1:ncell(log10bath))
 #==========================================================================
 # Loop over files
 #==========================================================================
+pb <- progress_estimated(n.to.process)
+log.msg("Processing %i files...\n",n.to.process)
+  
 for(i in seq(nrow(process.files))) {
+  pb$tick()$print()
   f <- process.files[i,]
-  log.msg("Now making predictions for %s...\n",basename(f$pred.fname))
   #Import file
-  sal.b.raw <- raster(f$salinity)
+  sal.b.raw <- raster(f$EN4.ex)
   #Adjust resolution to the prediction scale - should probably be done in the
   #extraction phase if this is too slow, but lets just leave it for the moment
   sal.b <- disaggregate(sal.b.raw,fact=res(sal.b.raw)/pred.res,method="bilinear")
