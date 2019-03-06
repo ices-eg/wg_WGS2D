@@ -43,17 +43,23 @@ library(lubridate)
 pred.fnames <- dir(pred.dir,full.names = TRUE,pattern="nc$")
 meta.df.all <- tibble(fname=pred.fnames,
                   date.str=str_extract(pred.fnames,"[0-9]{6}"),
-                  date=ymd(paste0(date.str,"01")))
+                  date=ymd(paste0(date.str,"15")),
+                  type=str_match(basename(fname),"^[0-9]{6}_(.*)\\.nc$")[,2])
 
 #Focus on the months of interest
 meta.df <- subset(meta.df.all,month(date)==spawn.month &
                               year(date) %in% climatology.yrs)
 
-#Now make one big stack over the whole lot
-preds.s <- stack(meta.df$fname)
-
-#And average
-pred.clim <- mean(preds.s)
+#Process by type
+pred.clim <- list()
+for(typ in unique(meta.df$type)){
+  #Select
+  typ.sel <- filter(meta.df,type==typ)
+  preds.s <- stack(typ.sel$fname)
+  
+  #And average
+  pred.clim[[typ]] <- mean(preds.s)
+}
 
 #Save results
 save(pred.clim,file="objects/Prediction_climatology.RData")
