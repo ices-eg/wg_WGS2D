@@ -81,8 +81,10 @@ ARMOR3D.rep.script <- paste("python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --us
 #"python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> --motu http://my.cmems-du.eu/motu-web/Motu --service-id INSITU_GLO_TS_OA_REP_OBSERVATIONS_013_002_b-TDS --product-id CORIOLIS-GLOBAL-CORA05.0-OBS_FULL_TIME_SERIE --longitude-min -180 --longitude-max 179.5 --latitude-min -77.0104751586914 --latitude-max 89.8962631225586 --date-min "2015-11-15 00:00:00" --date-max "2015-11-15 00:00:00" --depth-min -1 --depth-max 1 --variable PSAL --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>
   
 
-ts.scripts <- list("PSY4V3R1"=PSY4.script,CORIOLIS.OA=CORIOLIS.OA.script,
-                   ARMOR3D.NRT=ARMOR3D.nrt.script,ARMOR3D.REP=ARMOR3D.rep.script)
+ts.scripts <- list("PSY4V3R1"=PSY4.script,
+#                   CORIOLIS.OA=CORIOLIS.OA.script,
+                   ARMOR3D.NRT=ARMOR3D.nrt.script,
+                    ARMOR3D.REP=ARMOR3D.rep.script)
 
 #Misc
 motu.client <- "resources/motuclient-python/motuclient.py"
@@ -102,6 +104,9 @@ for(mdl.name in names(ts.scripts)) {
                                              depth.max="1000",
                                              script=motu.client,
                                              out.dir=file.path("data",mdl.name,"database"))
+  
+  #Check that directory exists
+  if(!dir.exists(ts.cfg@out.dir)) dir.create(ts.cfg@out.dir)
   
   #Get the list of available time steps for this product
   timesteps <- product.description(ts.cfg,"times")

@@ -56,9 +56,10 @@ load("objects/Timeseries_configurations.RData")
 #Loop over models
 for(mdl in names(CMEMS.cfgs)) {
   #Get list of available files
+  extr.dir <- file.path("data",mdl,"extraction")
   mdl.db <- tibble(fname=dir(CMEMS.cfgs[[mdl]]@out.dir,pattern="nc$",full.names = TRUE),
                    src.date=file.mtime(fname),
-                   ex.fname=file.path("data",mdl,"extraction",basename(fname)),
+                   ex.fname=file.path(extr.dir,basename(fname)),
                    ex.exists=file.exists(ex.fname),
                    ex.date=file.mtime(ex.fname))
   
@@ -69,6 +70,10 @@ for(mdl in names(CMEMS.cfgs)) {
     log.msg("No files to process for %s...\n",mdl)
     next
   }
+  
+  #Check that directory exists
+  if(!dir.exists(extr.dir)) dir.create(extr.dir)
+  
   
   pb <- progress_estimated(n.to.process)
   log.msg("Processing %i files for %s...",n.to.process,mdl)
