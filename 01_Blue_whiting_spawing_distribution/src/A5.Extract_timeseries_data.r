@@ -72,7 +72,7 @@ for(mdl in names(CMEMS.cfgs)) {
   }
   
   #Check that directory exists
-  if(!dir.exists(extr.dir)) dir.create(extr.dir)
+  if(!dir.exists(extr.dir)) dir.create(extr.dir,recursive=TRUE)
   
   
   pb <- progress_estimated(n.to.process)
