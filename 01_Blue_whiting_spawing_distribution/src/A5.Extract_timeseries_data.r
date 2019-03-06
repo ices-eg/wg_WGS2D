@@ -23,7 +23,7 @@
 #==========================================================================
 # Initialise system
 #==========================================================================
-cat(sprintf("\n%s\n","Extract PSY4 timeseries data"))
+cat(sprintf("\n%s\n","Extract timeseries data"))
 cat(sprintf("Analysis performed %s\n\n",base::date()))
 
 #Do house cleaning
@@ -34,41 +34,60 @@ start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
 source("src/00.Common_elements.r")
 library(tidyverse)
 library(ncdf4)
+library(RCMEMS)
 
-#==========================================================================
-# And go!
-#==========================================================================
 #==========================================================================
 # Configure
 #==========================================================================
 #Directories
 tmp.dir <- tempdir()
 
-#PSY4 configuration
-PSY4.db.dir <- file.path(PSY4.data.dir,"database")
-PSY4.vars <- c("so")
 wt.vertical.ave <- TRUE   #Do the vertical averaging with weighted means? Or simple arithmetics?
 
-#==========================================================================
-# Process EN4 files
-#==========================================================================
-#Get list of files
-PSY4.db <- data.frame(fname=dir(PSY4.db.dir,
-                                pattern="nc$",full.names = TRUE))
+#'========================================================================
+# Setup ####
+#'========================================================================
+#Import timeseries configurations
+load("objects/Timeseries_configurations.RData")
 
-#Loop over files
-for(f in PSY4.db$fname) {
-    log.msg("Processing %s...",basename(f))
+#==========================================================================
+# Process files
+#==========================================================================
+#Loop over models
+for(mdl in names(CMEMS.cfgs)) {
+  #Get list of available files
+  mdl.db <- tibble(fname=dir(CMEMS.cfgs[[mdl]]@out.dir,pattern="nc$",full.names = TRUE),
+                   src.date=file.mtime(fname),
+                   ex.fname=file.path("data",mdl,"extraction",basename(fname)),
+                   ex.exists=file.exists(ex.fname),
+                   ex.date=file.mtime(ex.fname))
+  
+  #Compare databases
+  src.to.process <- filter(mdl.db,!ex.exists | src.date > ex.date )
+  n.to.process <- nrow(src.to.process) 
+  if(n.to.process==0) {
+    log.msg("No files to process for %s...\n",mdl)
+    next
+  }
+  
+  pb <- progress_estimated(n.to.process)
+  log.msg("Processing %i files for %s...",n.to.process,mdl)
+
+  #Loop over files
+  for(i in seq(n.to.process)) {
+    pb$tick()$print()
+    f <- src.to.process[i,]
+
     #Loop over variables
-    for(v in PSY4.vars) {
-      log.msg("%s...",v)
+    extr.vars <- CMEMS.cfgs[[mdl]]@variable
+    for(v in extr.vars) {
       #Process using raster
-      b.raw <- brick(f,varname=v,lvar=4)
+      b.raw <- brick(f$fname,varname=v,lvar=4)
       
       #Get vertical layers
       layer.midpoints <- getZ(b.raw)
       layer.bnds <- c(0,approx(seq(layer.midpoints)-0.5,layer.midpoints,
-                                seq(layer.midpoints))$y)
+                               seq(layer.midpoints))$y)
       layer.thickness <- diff(layer.bnds)
       layer.idxs <- which(layer.midpoints > min(spawn.depth) & layer.midpoints < max(spawn.depth))
       
@@ -85,13 +104,14 @@ for(f in PSY4.db$fname) {
       bottom.val <- stackSelect(b.raw,bottom.idx,type="index")
       b <- cover(b,bottom.val)   #Replaces NAs in b with bottom values
       #Write the raster out for further use
-      fname <- gsub("nc$",sprintf("%s.nc",v),basename(f))
-      writeRaster(b,filename = file.path(PSY4.data.dir, fname),overwrite=TRUE)
+      writeRaster(b,filename = f$ex.fname,overwrite=TRUE)
     }
-    log.msg("Done.\n")
+  }
+  #Finish off timer
+  pb$stop()
+  log.msg("\n")
+  
 }
-
-
 #==========================================================================
 # Complete
 #==========================================================================
