@@ -55,6 +55,8 @@ load("objects/Timeseries_configurations.RData")
 #==========================================================================
 #Loop over models
 for(mdl in names(CMEMS.cfgs)) {
+  #Import meta data
+  meta.db <- readRDS(file.path(CMEMS.cfgs[[mdl]]@out.dir,))
   #Get list of available files
   extr.dir <- file.path("data",mdl,"extraction")
   mdl.db <- tibble(fname=dir(CMEMS.cfgs[[mdl]]@out.dir,pattern="nc$",full.names = TRUE),

@@ -65,31 +65,29 @@ if(length(EN4.vars)!=1) stop("Cannot process multiple variables (yet)")
 #Get list of files and archives
 EN4.db.zip.src <- dir(EN4.db.dir,pattern="zip$",full.names = TRUE)
 EN4.db.zip <- lapply(EN4.db.zip.src,function(f) data.frame(src=f,unzip(f,list=TRUE))) %>%
-                  bind_rows() %>% as_tibble()
+                  bind_rows() %>% as_tibble() %>%
+              select(src,db.fname=Name)
 EN4.nc.src <- dir(EN4.db.dir,pattern="nc$",full.names = TRUE)
 EN4.db <- rbind(EN4.db.zip,
                 data.frame(src=EN4.nc.src,
-                           Name=basename(EN4.nc.src),
-                           Length=file.size(EN4.nc.src),
-                           Date=file.mtime(EN4.nc.src))) %>%
-          rename(file.date=Date,file.size=Length,file.name=Name) %>%
-          mutate(src.date=file.mtime(src))
+                           db.fname=basename(EN4.nc.src))) %>%
+          mutate(src.mtime=file.mtime(src))
 
 #Extract date-time stamp and test for duplicates
-EN4.db$datetime <- gsub(".*\\.([0-9]{6})\\.nc$$","\\1",EN4.db$file.name)
-if(any(duplicated(EN4.db$datetime))) stop("Duplicate entries in EN4 database")
+EN4.db <- add_column(EN4.db,date=ymd(gsub(".*\\.([0-9]{6})\\.nc$$","\\115",EN4.db$db.fname)),.before = 1)
+if(any(duplicated(EN4.db$date))) stop("Duplicate entries in EN4 database")
 
 #Add in previous extractions
 EN4.db <- mutate(EN4.db,
-                 ex.exists=file.exists(file.path(EN4.ex.dir,file.name)),
-                 ex.datetime=file.mtime(file.path(EN4.ex.dir,file.name)))
+                 ex.fname=file.path(EN4.ex.dir,db.fname),
+                 ex.exists=file.exists(ex.fname),
+                 ex.mtime=file.mtime(ex.fname))
 
 #Compare databases
-EN4.to.process <- filter(EN4.db,!ex.exists | src.date > ex.datetime )
+EN4.to.process <- filter(EN4.db,!ex.exists | src.mtime > ex.mtime )
 n.to.process <- nrow(EN4.to.process) 
 
 if(n.to.process==0) stop("No data to process.")
-
 
 #'========================================================================
 # Process EN4 files ####
@@ -111,10 +109,10 @@ for(i in seq(n.to.process)) {
 
   #Decompress the individual files inside the archive
   if(grepl(".*zip$",f$src)) {
-    unzip(f$src,files = f$file.name,exdir = tmp.dir)
-    g <- file.path(tmp.dir,f$file.name)
+    unzip(f$src,files = f$db.fname,exdir = tmp.dir)
+    g <- file.path(tmp.dir,f$db.fname)
   } else {
-    g <- file.path(EN4.db.dir,f$file.name)
+    g <- f$src
   }
   
   #Get the layer thicknesses
@@ -145,7 +143,7 @@ for(i in seq(n.to.process)) {
   #Now subset spatially
   b <- crop(b,spatial.ROI)
   #Write the raster out for further use
-  writeRaster(b,filename = file.path(EN4.ex.dir, f$file.name),overwrite=TRUE)
+  writeRaster(b,filename = f$ex.fname,overwrite=TRUE)
   
   #Make some space by deleting the file
   file.remove(file.path(g))
@@ -154,10 +152,12 @@ for(i in seq(n.to.process)) {
 #Finish off timer
 pb$stop()
 
-
 #==========================================================================
 # Complete
 #==========================================================================
+#Save meta data
+saveRDS(EN4.db,file=file.path(EN4.data.dir,"metadata.rds"))
+
 #Turn off the lights
 if(grepl("pdf|png|wmf",names(dev.cur()))) {dmp <- dev.off()}
 log.msg("\nAnalysis complete in %.1fs at %s.\n",proc.time()[3]-start.time,base::date())

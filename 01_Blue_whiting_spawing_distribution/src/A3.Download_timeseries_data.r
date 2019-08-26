@@ -106,7 +106,7 @@ for(mdl.name in names(ts.scripts)) {
                                              out.dir=file.path("data",mdl.name,"database"))
   
   #Check that directory exists
-  if(!dir.exists(ts.cfg@out.dir)) dir.create(ts.cfg@out.dir,recursive=TRUE)
+  if(!dir.exists(ts.cfg@out.dir)) dir.create(ts.cfg@out.dir,recursive = TRUE)
   
   #Get the list of available time steps for this product
   timesteps <- product.description(ts.cfg,"times")
@@ -125,21 +125,30 @@ for(mdl.name in names(ts.scripts)) {
     mutate(dates=list(seq(start,end,by=int.seconds)))
   ts.l <- as.Date(do.call(c,ts.raw$dates))
   
-  #See what is already available in the database
-  db.fnames <- dir(ts.cfg@out.dir,full.names = TRUE,pattern="nc$")
-  db.meta <- tibble(fname=db.fnames,
-                    date=ymd(str_extract(db.fnames,"[0-9]{8}")))
-
+  #Create a list of metadata based on the available timesteps
+  db.meta <- tibble(date=ts.l,
+                    src=file.path(ts.cfg@out.dir,sprintf("%s_%s.nc",mdl.name,format(date,"%Y%m%d"))),
+                    src.exists=file.exists(src))
+  
   #Select missing timesteps
-  missing.timesteps <- subset(ts.l,!ts.l %in% db.meta$date )
-
-  #Loop over individual timesteps
-  for(ts in as.list(missing.timesteps)) {
-    output.fname <- sprintf("%s_%s.nc",mdl.name,format(ts,"%Y%m%d"))
-    log.msg("Downloading %s...\n",output.fname)
-    ts.cfg <- update(ts.cfg,out.name=output.fname)
-    CMEMS.download(ts.cfg,ROI=spatial.ROI,date.min=ts,date.max=ts)
+  missing.db <- filter(db.meta,!src.exists)
+  n.missing <- nrow(missing.db)
+  if(n.missing==0) {
+    log.msg("All data present.")
+  } else {
+    #Loop over individual timesteps
+    for(i in seq(n.missing)) {
+      f <- missing.db[i,]
+      log.msg("Downloading %s...\n",f$date)
+      ts.cfg <- update(ts.cfg,out.name=basename(f$src))
+      CMEMS.download(ts.cfg,ROI=spatial.ROI,date.min=f$date,date.max=f$date)
+    }
   }
+
+  #Save meta data
+  db.meta$src.exists <- NULL
+  saveRDS(db.meta,file=file.path("data",mdl.name,"database_metadata.RData"))
+
 }
 
 
