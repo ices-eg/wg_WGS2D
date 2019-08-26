@@ -106,7 +106,7 @@ for(mdl.name in names(ts.scripts)) {
                                              out.dir=file.path("data",mdl.name,"database"))
   
   #Check that directory exists
-  if(!dir.exists(ts.cfg@out.dir)) dir.create(ts.cfg@out.dir)
+  if(!dir.exists(ts.cfg@out.dir)) dir.create(ts.cfg@out.dir,recursive=TRUE)
   
   #Get the list of available time steps for this product
   timesteps <- product.description(ts.cfg,"times")
