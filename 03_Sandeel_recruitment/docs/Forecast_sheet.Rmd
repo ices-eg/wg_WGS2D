@@ -1,20 +1,15 @@
 ---
-title: "Sandeel Recruitment Forecast"
-subtitle: 'Fishforecasts Forecast sheet 03-20181204'
+title: "North Sea Sandeel Recruitment Forecast"
 output:
   html_document: 
     fig_caption: yes
     outputfile: test.html
   word_document: 
     fig_caption: yes
-    reference_docx: "../resources/word-styles-reference.docx"
+    reference_docx: "../../common/word-styles-reference.docx"
 ---
 
 ```{r setup, include="FALSE"}
-this.issue <- "17-09-2018"
-#Clean plate
-rm(list=ls())
-
 #Configure Knitr
 knitr::opts_chunk$set(
   echo=FALSE,
@@ -32,106 +27,115 @@ knitr::opts_chunk$set(
 #   root.dir="..")
 
 library(tidyverse)
-library(ggplot2)
-library(tibble)
-library(tidyverse)
-library(RColorBrewer)
 library(sf)
 library(mapdata)
-library(MuMIn)
 library(gridExtra)
-library(viridis)
+library(here)
 
 #Inline strings
-forecast.yr <- 2019
+issue.date <- as.Date("2019-09-20")
+forecast.yr <- 2020
 norm.fact <- 1e6
 most.recent.data <- "September 2019"
-lead.time <- "2 months"
+lead.time <- "5 months"
 #Configuration
 theme_set(theme_bw(base_size = 14))
+
+#TODO:
+# Add supplementary material with a time series of the recruitment levels per stock, and overall
 ```
 
-```{r}
-cfgs.l <- list(
-  "src/B.Configuration/B1.Sandeel_area1.r",
-  "src/B.Configuration/B2.Sandeel_area2.r",
-  "src/B.Configuration/B3.Sandeel_area3.r",
-  "src/B.Configuration/B4.Sandeel_area4.r"
-)
-```
-Issued 17-09-2019. Valid through to 01-04-2020. 
+Forecast sheet `r format(issue.date,"03-%Y%m%d")`
 
-Prepared by Mark R. Payne, DTU Aqua, Copenhagen, Denmark and Christian Kiær, DTU Aqua, Copenhagen Denmark(?).
+Issued `r format(issue.date,"%d-%m-%Y")`. Valid through to 01-04-2020. 
+
+Prepared by Mark R. Payne and Christian Kiær, DTU Aqua, Copenhagen, Denmark. 
+
+This is the first forecast for the 2019 cohort strength for all North Sea sandeel stocks.
 
 <!-- This forecast sheet superceeds the previous version 01-v02.1, issued 17-01-2018. For details, see the Change Log at the bottom of this document. -->
 
-This is a preliminary forecast of the 2019 cohort strength for all North Sea sandeel stocks and supersedes the single stock 2018 forecast released via fishforecast.dtu.dk on 4th of December 2018.
-
 ## Forecast
-The 2019 forecast of sandeel recruitment includes a categorical forecast for multiple management areas and a portfolio forecast for the North Sea. Only the management areas with sufficient data are forecasted (1r, 2r, 3r and 4), while the portfolio forecast includes information from each of the individual forecasts. The categorical forecast, based on terciles (low, medium and high) from the historically observed recruitment, indicates the probability of the current year class strength falling into a given category.
+The 2019  North Sea sandeel recruitment forecast covers the four assessed stocks (1r, 2r, 3r and 4) in the North Sea, together with the total recruitment across this portfolio of stocks. Forecasts for all individual stocks suggest a low probability (5% to 25%) of a strong year class, with a high probability (between 45% and 65%) of these year classes being in the lower third of the historically observed recruitment (Figure 1). 
 
-All individual forecasts suggests a low probability of a strong year class (5% to 25%), with a high probability of this year class being in the lower third of the historically observed recruitment (between 45% and 65%) (Figure 1). 
+The portfolio forecast (for recruitment summed across all four stocks) indicates a low probability of a strong overall year class (15%). Probabilities of summed recruitment being at low or medium levels are approximately equal  (40% and 45% respectively).
 
-The portfolio forecast also shows low probability of a strong overall year class (15%), but shows an almost equal probability of a low (lower third) or medium (medium third) 2019 recruitment year (40% to 45%).
-```{r Fig_Forecast,fig.cap="**Figure 1. Recruitment forecast for 2019 for 4 individual management areas and an aggregated portfolio forecast using information from all individual forecasts.** *Management area 1r, 2r, 3r and 4 are shown together with the portfolio forecast. The probabilities of the 2019 year class falling in each of the three terciles (high, medium or low recruitment) are plotted as horizontal bars. All individual stocks suggests a recruitment in the lower thirds of the historically observed values, while the portfolio forecast shows equal probabilities of low and medium. No forecast indicates a high probability of a high recruitment. Tercile thresholds are based on the values from the complete time series for a given forecast area.*", dpi=300}
+```{r Fig_Forecast,fig.cap="**Figure 1. Recruitment forecast for 2019 cohort for the individual management areas and for the aggregated recruitment across the portfolio of all four individual stocks.** *The probabilities of the 2019 year class falling in each of the three terciles (high, medium or low recruitment) are plotted as horizontal bars. Tercile thresholds are based on the values from the complete time series for a given forecast area and for the aggregated portfolio.*", dpi=300}
 #'========================================================================
 # Setup ####
 #'========================================================================
-load("objects/Forecast_sheet_metrics.RData")
-order <- c("Area 1r", "Area 2r", "Area 3r", "Area 4", "Portfolio")
-order.t <- c("High", "Medium", "Low")
-#terc.labels <- arrange(terc.labels, match(model, c("Sandeel Area 1", "Sandeel Area 2", "Sandeel Area 3", "Sandeel Area 4", "Portfolio")))
-terc.labels <- arrange(transform(terc.labels,
-             model=factor(model,levels=order)),model)
-tss.metrics <- arrange(transform(tss.metrics,
-             model=factor(model,levels=order)),model)
-prop.correct <- arrange(transform(prop.correct,
-             model=factor(model,levels=order)),model)
+load(here("data/Forecast_sheet_metrics.RData"))
+order.area <- c("Area 1r", "Area 2r", "Area 3r", "Area 4", "Portfolio")
+order.terc <- c("High", "Medium", "Low")
 
-tss.metrics <- arrange(transform(tss.metrics, 
-                                  tercile=factor(tercile, levels=order.t), tercile))
-# prop.correct <- arrange(transform(prop.correct, 
-#                                  tercile=factor(tercile, levels=order.t), tercile))
+# Labels --------------------------------------------------------------------------
+terc.labels <- 
+  terc.labels %>%
+  mutate(model=factor(model,levels=order.area)) %>%
+  arrange(model)
+
+tss.metrics <- 
+  tss.metrics %>%
+  mutate(model=factor(model,levels=order.area),
+         tercile=factor(tercile, levels=order.terc)) %>%
+  arrange(model)
+
+prop.correct <-
+  prop.correct %>%
+  mutate(model=factor(model,levels=order.area)) %>%
+  arrange(model)
 
 #'========================================================================
 # Visualise forecasts ####
 #'========================================================================
-ggplot()+
-  geom_bar(data=terc.labels,aes(x=lbl, y=prob.lbl, fill=lbl), colour="black", stat = "identity", width = 1, position = position_stack(reverse = TRUE))+
-  geom_text(data=terc.labels,aes(x=lbl,y=prob.lbl+20, label=paste0(prob.lbl, "%")))+
+
+#Filter plot data
+forecast.plt <- 
+  terc.labels
+  #filter(model %in% c("Area 1r", "Area 4","Portfolio"))
+
+ggplot(forecast.plt)+
+  geom_bar(aes(x=lbl, y=prob.lbl, fill=lbl), 
+           colour="black", stat = "identity", width = 1, 
+           position = position_stack(reverse = TRUE))+
+  geom_text(aes(x=lbl,y=prob.lbl+20, label=paste0(prob.lbl, "%")))+
   scale_fill_brewer(palette = "BrBG") +
   coord_flip(ylim = c(0,100)) +
   facet_wrap(~model, ncol=5) +
   scale_x_discrete(limits = rev(levels(terc.labels$lbl))) +
-  labs(title = "2019 Sandeel recruitment forecast", x = "Recruitment terciles", y = "Probability [%]", fill="")+
+  labs(x = "Recruitment terciles", 
+       y = "Probability [%]", 
+       fill="")+
   theme(panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank(), 
         panel.grid.minor.x = element_blank(), legend.position = "none")
 ```
 
+## How to use this forecast
+
+This forecast should be used as an indicator of the expected productivity (high, medium low) of the next sandeel cohort for each of the four stocks  and for the species as a whole across the North Sea. The forecast can be used in planning commercial activities related to this species for the coming year. For activities that are dependent on North Sea sandeel as a whole, rather than on an individual stock, the "Portfolio" forecast should be consulted.
 
 ## Background
 
-Lesser sandeel (<i>Ammodytes marinus</i>) in the North Sea form the basis for a commercially important fishery, where they are used in the production of fishoil and fishmeal. The species lives on sandy banks distributed throughout the North Sea: while the adults are typically bound to a specific bank, larval sandeel are pelagic and drift between banks. Particle tracking studies (Christensen et al 2008) have characterised this connectivity pattern and form the basis for the definition of seven management units. Four management areas are not considered data poor and can be included in the forecast (Figure 2).
-```{r Fig_Banks,fig.cap="**Figure 2. Sandeel areas and banks in the North Sea.** *Sandeel management areas outlined, with the habitat banks marked in gray within each area.*", echo=FALSE,results='hide',fig.keep='all', dpi=300}
-#source("src/B.Configuration/B2.Sandeel_area2.r")
-load("objects/configuration.RData")
+Lesser sandeel (*Ammodytes marinus*) in the North Sea form the basis for a commercially important fishery, where they are used in the production of fishoil and fishmeal. The species lives on sandy banks distributed throughout the North Sea: while the adults are typically bound to a specific bank, larval sandeel are pelagic and drift between banks. Particle tracking studies (Christensen et al 2008) have characterised this connectivity pattern and form the basis for the definition of seven management units. Analytical stock assessments are performed annualy by ICES for four management areas (Figure 2).
 
-st_crs(pcfg@polys) <- st_crs(pcfg@banks.sf)
-#cords <- c()
+```{r Fig_Banks,fig.cap="**Figure 2. Sandeel areas and banks in the North Sea.** *Sandeel management areas outlined, with the habitat banks coloured within each area.*", echo=FALSE,results='hide',fig.keep='all', dpi=300}
+load(here("objects/Polygons.RData"))
+
+st_crs(SAN.polys) <- st_crs(banks.sf)
+
 ggplot()+
-  geom_sf(data=pcfg@polys,fill=NA)+
+  geom_sf(data=SAN.polys,fill=NA)+
   annotation_map(map_data("worldHires"),fill="gray")+
-  geom_sf(data=pcfg@banks.sf) +
+  geom_sf(data=banks.sf,fill="lightsalmon") +
   geom_text(aes(x=4.5,y=54.7, label="1r"), size=10) +
   geom_text(aes(x=9.2,y=55.7, label="2r"), size=10) +
   geom_text(aes(x=3.8,y=58.4, label="3r"), size=10) +
-  geom_text(aes(x=-1,y=58.4, label="4"), size=10)
-
-  #geom_sf(data=pcfg@spatial.domains,fill="red",colour="red")
+  geom_text(aes(x=-1,y=58.4, label="4"), size=10)+
+  labs(x=NULL,y=NULL)
 
 ```
 
-Several studies have linked the recruitment of sandeel in Area 1 to both demographic and environmental parameters. Arnott and Ruxton (2002) documented a link between recruitment at age zero, and the number of juveniles in the same area of age 1 via competition: large numbers of juvenile sandeel lead to reduced survival of recruits. Other authors have also demonstrated a link to the environment, both in terms of the abundance of food species (*Calanus finmarchicus*, *Temora longicornis*) and temperatures (Apr-June average SST) (van Deurs et al 2009; Lindegren et al 2018). All of these manuscripts have also shown links to adult spawning stock biomass.  Here we validate and operationalise this knowledge to produce individual forecasts of sandeel recruitment in management areas 1r, 2r, 3r and 4 in the North Sea. The individual forecasts is aggregated into a single portfolio forecast, which can increase the predictability of the overall recruitment across the chosen management areas.
+Several studies have linked the recruitment of sandeel (primarily in Area 1r) to both demographic and environmental parameters. Arnott and Ruxton (2002) documented a link between recruitment at age zero, and the number of juveniles in the same area of age 1 via competition: large numbers of juvenile sandeel lead to reduced survival of recruits. Other authors have also demonstrated a link to the environment, both in terms of the abundance of food species (*Calanus finmarchicus*, *Temora longicornis*) and temperatures (Apr-June average SST) (van Deurs *et al* 2009; Lindegren *et al* 2018). All of these manuscripts have also shown links to adult spawning stock biomass.  Here we validate and operationalise this knowledge to produce individual forecasts of sandeel recruitment in management areas 1r, 2r, 3r and 4. Furthermore, the individual forecasts are aggregated into a single portfolio forecast across these four stocks in the North Sea.
 
 ## Basis for the Forecast 
 
@@ -142,12 +146,12 @@ Environmental data set(s) | NOAA OISST v2 AVHRR-ony product (also known as Reyno
 Environmental variables| Sea-surface temperature averaged by quarter on the sandeel habitat banks (Figure 2), covering both the two quarters  prior to spawning of a year class and four quarters post-spawning.
 Environmental forecast method | None. All environmental parameters are based on recent observations.
 Additional variables| Demographic parameters of the stock, based on the most recent estimate from ICES.
-Forecast lead time | `r lead.time` prior to the first official estimate of this year class strength from ICES.  |
+Forecast lead time | `r lead.time` prior to the first official estimate of this year class strength from ICES being published.  |
 Table: **Table 1. Overview of the basis for the forecast.**
 
 The predictors employed can be broken down as follows:
 
-* Sea surface temperatures
+* Sea surface temperatures (SST)
   + P3 - Jul-Sep temperatures experienced by the adults prior to spawning
   + P4 - Oct-Dec temperatures experienced by the adults prior to / during spawning
   + Q1 - Jan-Mar temperature experienced during egg development
@@ -162,113 +166,139 @@ The predictors employed can be broken down as follows:
 * Other variables
   + Year - Cohort year, included to allow time-variation in the mean productivity of the stock due to systematic shifts in other unquantified variables
 
-The forecast model is parameterised based on these explanatory variables by first fitting all models that can be created by including / excluding the set of 11 explanatory variables. To avoid collinearity a model can only include one environmental and one additional demographic variable besides logSSB. The small-sample corrected Akaike Information Criteria (AICc) for each model over the calibration period is converted to an Akaike weight within the ensemble and then used to weight the individual predictions from each model when operating in forecast mode.
+The forecast model is parameterised based on these explanatory variables by first fitting all models that can be created by including / excluding the set of 11 explanatory variables. To avoid collinearity, models are restricted to include one environmental and one additional demographic variable in addition to logSSB. The small-sample corrected Akaike Information Criteria (AICc) for each model over the calibration period is converted to an Akaike weight within the ensemble and then used to weight the individual predictions from each model when operating in forecast mode.
 
-Log recruitment is used as the response variable, with an additive structure for each explanatory term. The logSSB and Year variables are represented by spline smoothers, with the maximum degrees of freedom associated with each spline constrained to be three or less. The models are fit using the mgcv and MuMIn packages in R.
+Log recruitment is used as the response variable, with an additive structure for each explanatory term. The logSSB and Year variables are represented by spline smoothers, with the maximum degrees of freedom associated with each spline constrained to be three or less. The models are fit using the `mgcv` and `MuMIn` packages in R.
 
-The relative contribution of each explanatory variable group (e.g. demographic and environmental) to the model ensemble for each individual forecast area can be seen in Figure 3.
+The relative contribution of each explanatory variable group (e.g. demographic and SST) to the model ensemble for each individual forecast area can be seen in Figure 3.
 
-```{r Fig_RVI,fig.cap="**Figure 3. Relative Variable Importance in the model ensemble for each area** *The relative variable importance (defined on a scale between 0 and 1 of each explanatory variable is shown for the model ensemble incorporating all data e.g. 1983-2018. These terms are however not constant, and can and do change over time. Terms fitted with a spline smoother are denoted by the s() term - all other terms are linear.*", , dpi=300}
-rvi.df.w <- spread(rvi.df, var, value)
+```{r Fig_RVI,fig.cap="**Figure 3. Relative Variable Importance in the model ensemble for each area** *The relative variable importance (defined on a scale between 0 and 1 of each group of explanatory variables) is shown for the model ensemble incorporating all data e.g. 1983-2018. These terms are however not constant, and can and do change over time. Terms fitted with a spline smoother are denoted by the s() term - all other terms are linear. The RVIs for the demographic and SST groups, as defined above, are lumped together and represent the sum of the RVIs for the members of these groups.*", , dpi=300}
+rvi.plt <- 
+  rvi.df %>%
+  spread(var, value) %>%
+  #Aggregate groupings together
+  transmute(area=model,
+            `s(logSSB)`,`s(Year)`,
+            SST = P3+P4+Q1+Q2+Q3+Q4, 
+            Demography=logN1+logSumN+logTSB) %>%
+  #Gather it all again to plot
+  gather(key = "var", val = "Value", -area)
 
-rvi.df.w <- rvi.df.w %>%
-  mutate(Environment = P3+P4+Q1+Q2+Q3+Q4, Demography=logN1+logSumN+logTSB) %>%
-  dplyr::select(-P3,-P4,-Q1,-Q2,-Q3,-Q4,-logN1,-logSumN,-logTSB)
-
-rvi.df.l <- gather(rvi.df.w, key = "var", val = "Value", "s(logSSB)", "s(Year)", Environment, Demography)
-
-ggplot(rvi.df.l)+
-  geom_bar(aes(x=var,y=Value, fill=model),stat="identity", position = position_dodge(width=0.8), colour="black", width = 0.7)+
+ggplot(rvi.plt)+
+  geom_bar(aes(x=var,y=Value, fill=area),
+           stat="identity", 
+           position = position_dodge(width=0.8), 
+           colour="black", width = 0.7)+
   scale_fill_brewer(palette = "Set2") +
   labs(x="Variable",y="Relative variable importance")+
-  theme(axis.text.x.bottom = element_text(angle = 90,hjust = 1))+
+  #theme(axis.text.x.bottom = element_text(angle = 90,hjust = 1))+
   coord_cartesian(ylim=c(0,1.02),expand=TRUE)+
   scale_x_discrete(expand = c(0,0.6))+
   scale_y_continuous(expand = c(0,0))+
   labs(fill = "Area")
 
-
 ```
 
-Probabilistic forecasts were generated by based on the predictive distributions generated by the fitted models. Continuous values of log-recruitment were converted to terciles (high, medium and low) based on the distribution of recruitment over the full historical time series. Categorical forecasts were made by choosing the most likely value of the three terciles.
+Aggregated recruitment values and forecasts across the entire North Sea were produced by a simple arithmetric sum of the corresponding values from each of the four stocks. The forecast models for each stock were fitted independently, and then summed to produce the value for the entire "Portfolio".
+
+Probabilistic forecasts were generated by based on the predictive distributions generated by the fitted models. Continuous values of log-recruitment were converted to terciles (high, medium and low) based on the distribution of recruitment over the full historical time series for each stock and for the "Portfolio" of stocks. Categorical forecasts were made by choosing the most likely value of the three terciles.
 
 ## Forecast Skill Assessment
 
-Forecast skill was assessed in a situation that directly mimics the operational usage of this forecast system. The available data was first truncated at a cut-off year (e.g. 2006) and the empirical model described above was parameterised using all data up to and including this year (calibration period). The predictors available in the remaining part of the time series (validation period) were then used to make predictions for each year class. The process was then repeated for cut-off years from 2006 to 2018. Forecast skill was then evaluated by comparing the predicted values with the true recruitment values as a function of lead time.
+Forecast skill was assessed in a situation that directly mimics the operational usage of this forecast system. The available data was first truncated at a cut-off year (e.g. 2006) and the empirical model described above was parameterised using all data up to and including this year (calibration period). The predictors available in the remaining part of the time series (validation period) were then used to make predictions for each year class. The process was then repeated for cut-off years from 2006 to 2018. Forecast skill was then evaluated by comparing the predicted values with the true recruitment values.
 
-In an operational setting the predictions consists of the current assessment years (lead time of 0) recruitment. For this reason, when doing retrospective forecasts, skill evaluation is presented for lead 0 specifically. Skill is evaluated for all chosen management areas and the portfolio forecast.
+In an operational setting the predictions correspond to the current assessment year's recruitment (i.e. lead time of 0). For this reason, when doing retrospective forecasts, skill evaluation is presented for lead 0 specifically. Skill is evaluated for all chosen management areas and the portfolio forecast.
 
 Forecast skill was first evaluated by considering the number of times in which the model correctly predicts the recruitment category (i.e. high, medium or low recruitment) (Figure 4). As a reference forecast, we choose random selection of each category with equal probability (i.e. 1/3).
 
 ```{r Skill_assessment_I, fig.cap="**Figure 4. Skill assessment across all categories for each forecast.** *The overall skill of the recruitment forecast system in predicting each of high, medium, and low recruitments is shown for a lead time of 0. Model skill is represented as the proportion of times in which the model correctly predicts the recruitment category (shown in percentage). The proportion correct is shown for all individual management areas and the portfolio forecast. The cut-off for the 95% significance level is also shown as a dashed line.*", dpi=300}
-prop.correct$prop.correct <- prop.correct$prop.correct*100
+prop.correct.plt <- 
+  prop.correct %>%
+  mutate(prop.correct=prop.correct*100)
+
 ggplot()+
-  geom_bar(data=prop.correct,aes(x=model, y=prop.correct, fill=model),colour="black", stat = "identity", width = 0.6)+
+  geom_bar(data=prop.correct.plt,
+           aes(x=model, y=prop.correct, fill=model),
+           colour="black", stat = "identity", width = 0.6)+
   scale_fill_brewer(palette = "Set2") +
   scale_y_continuous(expand = c(0,0))+
   scale_x_discrete(expand = c(0,0.5))+
-  #coord_flip(ylim = c(0,100)) +
   coord_cartesian(ylim=c(0,100), expand = TRUE) +
-  geom_hline(data=prop.correct, aes(yintercept=((qbinom(0.95,n,1/3))/n)*100, linetype="95% Signif."))+
+  geom_hline(data=prop.correct.plt, 
+             aes(yintercept=((qbinom(0.95,n,1/3))/n)*100, 
+                 linetype="95% Signif."))+
   scale_linetype_manual(name = "Significance", values = 3,
-                      guide = guide_legend(override.aes = list(color = ("black"))))+
+                        guide = guide_legend(override.aes = list(color = ("black"))))+
   labs(y = "Proportion correct [%]", x = "", fill="Area") +
   geom_vline(data=prop.correct, aes(xintercept=4.5), linetype="solid", colour="black", size=0.4) +
   theme(panel.grid.major.x = element_blank(), 
-        panel.grid.minor.x = element_blank(), panel.grid.minor.y = element_blank(), legend.position = "none")
+        panel.grid.minor.x = element_blank(), 
+        panel.grid.minor.y = element_blank(), 
+        legend.position = "none")
 
 ```
 
-This result shows that at lead 0 the forecast system significantly outperforms the reference forecast at the 95% level for all management areas and the portfolio forecast. The portfolio forecast has the highest correct hit rate reaching almost 70%. Area 1r shows the best performance of the individual forecasts (just over 60% hit rate), with area 2r, 3r and 4 all reaching above 50% hit rate.
+This result shows that the forecast system significantly outperforms the reference forecast at the 95% level for all management areas and the portfolio forecast. The portfolio forecast has the highest correct hit rate reaching almost 70%. Area 1r shows the best performance of the individual forecasts (just over 60% hit rate), with area 2r, 3r and 4 all reaching above 50% hit rate. All areas are significantly better than random guessing at the 95% level.
 
 It is also important to examine the forecast skill for each category, and its ability to correctly distinguish between the occurrence and absence of an event (and thus avoid false alarms). Forecast skill was therefore also measured using the so-called True Skill Score, TSS (also known as the Peirce Skill Score). The metric ranges between +1 and -1, with a value of 0 corresponding to random guessing (Figure 5).
 
 
-```{r Skill_assessment_II, fig.cap="**Figure 5. Skill assessment by category.** *(a) The skill of the recruitment forecast system in predicting each of high, medium, and low recruitments is shown at lead time of 0 for all individual areas and the portfolio forecast. (b) The skill shown according to recruitment terciles is shown for lead 0. Model skill is represented as the True (Peirce) Skill Score (TSS), which ranges between +1 and -1, and has a value of 1 for perfect skill, and 0 for random guessing (black dashed line). The 95% confidence interval for the estimated skill score are shown as error bars on each of the points.*", dpi=300}
-tss.metrics <- tss.metrics %>%
-  mutate(Tercile=tercile) %>%
-  mutate(Area=gsub("Area ", "", model))
+```{r Skill_assessment_II, fig.cap="**Figure 5. Skill assessment by category.** *(a) The skill of the recruitment forecast system in predicting each of high, medium, and low recruitments is shown for all individual areas and the portfolio forecast. (b) The skill shown according to recruitment terciles is shown. Model skill is represented as the True (Peirce) Skill Score (TSS), which ranges between +1 and -1, and has a value of 1 for perfect skill, and 0 for random guessing (black dashed line). The 95% confidence interval for the estimated skill score are shown as error bars on each of the points.*", dpi=300}
+tss.metrics.plt <- 
+  tss.metrics %>%
+  mutate(Tercile=factor(tercile,levels=rev(levels(tercile))),
+         Area=gsub("Area ", "", model))
 
-tss1 <- ggplot(data=tss.metrics,aes(x=model, y=mean, colour=Tercile, group=Tercile, shape=Tercile))+
-  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.2, position=position_dodge(width = 0.5), linetype="solid", colour="black")+
-  #geom_point(aes(), size=5, position=position_dodge(width = 0.5), colour="black") +
-  geom_point(aes(fill=Tercile), size=3, position=position_dodge(width = 0.5), colour="black") +
+tss1 <- 
+  ggplot(data=tss.metrics.plt,
+         aes(x=model, y=mean, colour=Tercile, group=Tercile, shape=Tercile))+
+  geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), 
+                width=.2, position=position_dodge(width = 0.5), 
+                linetype="solid", colour="black")+
+  geom_point(aes(fill=Tercile), 
+             size=3, position=position_dodge(width = 0.5), colour="black") +
   scale_shape_manual(values=c(21, 22, 24))+
   scale_colour_brewer(palette = "BrBG") +
   scale_y_continuous(expand = c(0,0))+
   scale_fill_brewer(palette = "BrBG") +
   coord_cartesian(ylim = c(-1,1)) +
-  #facet_wrap(tercile~., ncol=1) +
-  geom_hline(yintercept=0, linetype="dashed", color = "black")+
   labs( x= "Area", y = "True Skill Score (TSS)")+
   geom_vline(xintercept=c(1.5,2.5,3.5,4.5), colour="grey")+
-  theme(legend.position="bottom", panel.grid.major.x = element_blank(),
+  theme(legend.position="bottom", 
+        panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank()) +
-  geom_text(aes(x=0.6,y=0.9, label="a)"), colour="black")
+  annotate("text",x=0.6,y=0.9, label="a)",colour="black")
 
 
-tss2 <- ggplot(data=tss.metrics,aes(x=Tercile, y=mean, colour=Area, shape = Area))+
-  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), width=.2, position=position_dodge(width = 0.5), linetype="solid", colour="black")+ 
-  geom_point(aes(fill=Area), size=3, position=position_dodge(width = 0.5), colour="black") +
+tss2 <- 
+  ggplot(data=tss.metrics.plt,
+         aes(x=Tercile, y=mean, colour=Area, shape = Area))+
+  geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  geom_errorbar(aes(ymin=mean-se, ymax=mean+se), 
+                width=.2, position=position_dodge(width = 0.5), 
+                linetype="solid", colour="black")+ 
+  geom_point(aes(fill=Area), 
+             size=3, position=position_dodge(width = 0.5), colour="black") +
+  geom_vline(xintercept=c(1.5,2.5), colour="grey")+
   scale_shape_manual(values=c(21, 22, 23, 24, 25))+
-  guides(fill="legend")+
   scale_colour_brewer(palette = "Set2") +
   scale_fill_brewer(palette = "Set2") +
-  coord_cartesian(ylim = c(-1,1)) +
   scale_y_continuous(labels = rep("", 5), breaks = seq(-1,1,.5), expand = c(0,0))+
-  #scale_x_discrete(minor_breaks = seq(1.5, 4.5, 1)) +
-  #facet_wrap(tercile~., ncol=1) +
-  geom_hline(yintercept=0, linetype="dashed", color = "black")+
+  coord_cartesian(ylim = c(-1,1)) +
+  guides(fill="legend")+
   labs( x= "Recruitment tercile", y = "") +
-  geom_vline(xintercept=c(1.5,2.5), colour="grey")+
-  theme(legend.position="bottom", panel.grid.major.x = element_blank(),
+  theme(legend.position="bottom", 
+        panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank()) +
-  geom_text(aes(x=0.6,y=0.9, label="b)"), colour="black")
+  annotate("text",x=0.6,y=0.9, label="b)",colour="black")
   
 grid.arrange(tss1, tss2, ncol=2)
+
+print(tss1)
 ```
 
-This result shows that we see large differences between areas, with only area 1r and the portfolio forecast outperforming random guessing in all terciles. Area 2r and 3r shows indications of being unable to correctly distinguishing between events (Figure 5a). The models are generally best at correctly predicting high and low, while the skill in the medium terciles is lower (Figure 5b). This should be bore in mind when interpreting the forecast.
+This result shows that we see large differences between areas, with only area 1r and the portfolio forecast outperforming random guessing consistently across all terciles. Area 2r and 3r shows indications of being unable to outperform random guessing (Figure 5a) The models are generally best at correctly predicting high and low, while the skill in the medium terciles is lower (Figure 5b). This should be borne in mind when interpreting the forecast.
 
 ## Quality Considerations
 
@@ -276,10 +306,11 @@ The skill of this forecast model has been evaluated in a realistic setting over 
 
 Various authors have highlighted the effect of *C. finmarchicus* and *T. longicornis* on recruitment to this species (van Deurs et al 2009; Lindegren et al 2018). However, it is not possible to include these variables in the forecasts due to the lag between collecting these samples and when they are first made available. However, exploratory analyses based on the subset of the data for which these variables are available have shown that they do not make major contributions to the forecast skill.
 
+Forecasts for areas 2r and 3r have TSS scores not significantly-different from zero, indicating that they do not have the ability to outperform random guessing. This result arises in part due to the relatively low recruitment seen in these stocks in recent years, effecting the ability of the TSS metric to quantify the forecast skill. These stocks are nevertheless included in this forecast due to the ability of the model to capture this effect (as seen in the proportion of correct forecasts).
 
 ## For More Information
 
-For more information, contact Mark R. Payne, DTU-Aqua, http://www.staff.dtu.dk/mpay. The latest version of this and other forecasts can be found on the website [fishforecasts.dtu.dk](http://fishforecasts.dtu.dk)  Code used to generate this forecast is available from the WGS2D GitHub repository, [https://github.com/ices-eg/wg_WGS2D](https://github.com/ices-eg/wg_WGS2D) in the directory "03_Sandeel_Recruitment_Forecast".
+For more information, contact Mark R. Payne, DTU-Aqua, http://www.staff.dtu.dk/mpay (Twitter @MarkPayneAtWork). The latest version of this and other forecasts can be found on the website [fishforecasts.dtu.dk](http://fishforecasts.dtu.dk), including archived versions of this forecast. Code used to generate this forecast is available from the WGS2D GitHub repository, [https://github.com/ices-eg/wg_WGS2D](https://github.com/ices-eg/wg_WGS2D) in the directory "03_Sandeel_Recruitment_Forecast".
 
 ## References
 
@@ -297,6 +328,7 @@ For more information, contact Mark R. Payne, DTU-Aqua, http://www.staff.dtu.dk/m
 
 ## Change Log
 
+* 20190920 New forecast for 2019 year class. Expansion to include all four stocks, plus a portfolio forecast as well.
 * 20181204 Full forecast sheet developed, with minor tweaks to the forecast model (switching from HadISST to OISST, and focusing on the specific banks, rather than all of Area 1).
 * 20181113 Initial forecast for 2018 year class published via Twitter https://twitter.com/MarkPayneAtWork/status/1062287436586328065
 
@@ -310,8 +342,7 @@ This work comes with ABSOLUTELY NO WARRANTY or support.
 ## Acknowledgements
 The research leading to these results has received funding from the European Union Horizon 2020 research and innovation programme under grant agreement number 727852 (Blue-Action). 
 
-<!-- ![](../../common/blue-action-logo.png)  -->
-![](../resources/blue-action-logo.png)
+![](`r here("../common/blue-action-logo.png")` )
 
 
 
