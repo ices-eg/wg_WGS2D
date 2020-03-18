@@ -52,11 +52,18 @@ library(stringr)
 mdl.name <- "PSY4V3R1"
 
 #Snapshot script of the most recent value
-snapshot.script <- 'python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> --motu http://nrtcmems.mercator-ocean.fr/motu-web/Motu --service-id GLOBAL_ANALYSIS_FORECAST_PHY_001_024-TDS --product-id global-analysis-forecast-phy-001-024 --longitude-min -180 --longitude-max 179.91667175293 --latitude-min -80 --latitude-max 90 --date-min "2018-03-01 12:00:00" --date-max "2018-03-01 12:00:00" --depth-min 222.4751 --depth-max 763.3333 --variable so -out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME> '
-snapshot.date <- as.Date("2018-03-01")
+#snapshot.script <- 'python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> --motu http://nrtcmems.mercator-ocean.fr/motu-web/Motu --service-id GLOBAL_ANALYSIS_FORECAST_PHY_001_024-TDS --product-id global-analysis-forecast-phy-001-024 --longitude-min -180 --longitude-max 179.91667175293 --latitude-min -80 --latitude-max 90 --date-min "2018-03-01 12:00:00" --date-max "2018-03-01 12:00:00" --depth-min 222.4751 --depth-max 763.3333 --variable so -out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME> '
+snapshot.script <- paste("python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> ",
+                     "--motu http://nrt.cmems-du.eu/motu-web/Motu --service-id GLOBAL_ANALYSIS_FORECAST_PHY_001_024-TDS ",
+                     "--product-id global-analysis-forecast-phy-001-024-monthly --longitude-min -180 ",
+                     "--longitude-max 179.9166717529297 --latitude-min -80 --latitude-max 90 ",
+                     #--date-min "2018-11-16 00:00:00" --date-max "2018-11-16 00:00:00" 
+                     "--depth-min 0.493 --depth-max 0.4942 --variable so --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>")
+
+snapshot.date <- as.Date("2020-02-15")
 
 #Misc
-motu.client <- "objects/motu-client-python/motu-client.py"
+motu.client <- "resources/motuclient-python/motuclient.py"
 
 #==========================================================================
 # Download snapshot 

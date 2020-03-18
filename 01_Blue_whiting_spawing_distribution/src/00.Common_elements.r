@@ -65,7 +65,7 @@ oceanography.ROI <- extent(-20,0,50,60)  #Focus on spawning region
 
 #Directories
 EN4.data.dir <- "data/EN4"
-PSY4.data.dir <- "data/PSY4V3R1"
+PSY4.data.dir <- "data/PSY4V3R1/database"
 pred.dir <- file.path("outputs","predictions")
 
 #Resolution of predicted distribution

@@ -45,6 +45,7 @@ library(lubridate)
 #Get list of EN4 data files
 EN4.fnames <- dir( EN4.data.dir,full.names = TRUE,pattern="nc$")
 EN4.meta <- tibble(source="EN4",
+                   varname="salinity",
                    fname=EN4.fnames,
                       date.str=str_extract(EN4.fnames,"[0-9]{6}"),
                       date=ymd(paste0(date.str,"01")))
@@ -52,6 +53,7 @@ EN4.meta <- tibble(source="EN4",
 #Get list of PSY4 files
 PSY4.fnames <- dir(PSY4.data.dir,full.names = TRUE,pattern="nc$")
 PSY4.meta <- tibble(source="PSY4",
+                    varname="so",
                     fname=PSY4.fnames,
                    date.str=str_extract(PSY4.fnames,"[0-9]{8}"),
                    date=ymd(date.str)) %>%
@@ -71,7 +73,7 @@ meta.df$salinity <- as.double(NA)
 for(i in seq(nrow(meta.df))) {
   log.msg("Processing %s...\n",basename(meta.df$fname[i]))
   #Setup raster
-  r <- raster(meta.df$fname[i])
+  r <- raster(meta.df$fname[i],varname=meta.df$varname[i])
   
   #Resize to appropriate ROI
   r <- raster::crop(r,oceanography.ROI)

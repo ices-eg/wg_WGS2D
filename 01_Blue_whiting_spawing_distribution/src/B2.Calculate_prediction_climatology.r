@@ -36,17 +36,46 @@ library(tidyverse)
 library(stringr)
 library(lubridate)
 
+#'========================================================================
+# Configuration ####
+#'========================================================================
+predEng.dir <- "resources/BW-Salinity//"  #Directory containing results for BW from PredEng
+
 #==========================================================================
 # Setup
 #==========================================================================
-#Get list of prediction files
-pred.fnames <- dir(pred.dir,full.names = TRUE,pattern="nc$")
-meta.df.all <- tibble(fname=pred.fnames,
-                  date.str=str_extract(pred.fnames,"[0-9]{6}"),
-                  date=ymd(paste0(date.str,"15")),
-                  type=str_match(basename(fname),"^[0-9]{6}_(.*)\\.nc$")[,2])
+#Get and filter list of statistics
+stats.cfg <- 
+  readRDS(file.path(predEng.dir,"Statistics","Stats_configuration.rds"))  %>%
+  unnest(data) %>%
+  #Only interested in observations
+  filter(src.type=="Observations")
 
-#Focus on the months of interest
+#Import statistics
+stats.l <-
+  stats.cfg %>%
+  mutate(stats= purrr::map(res.fname, ~ readRDS(file.path(predEng.dir,"Statistics",.x)))) 
+
+#'========================================================================
+# Field predictions ####
+#'========================================================================
+#Extract the SDM predictions 
+SDM.res <-
+  stats.l %>%
+  filter(stat.name=="SDMrealmean") %>% 
+  select(stats) %>%
+  unnest(stats)
+
+#Calculate the climatology field
+SDM.clim.df <-
+  SDM.res %>%
+  filter(year(date) %in% climatology.yrs) 
+
+SDM.clim <- 
+  brick(SDM.clim.df$field) %>%
+  mean()
+  
+
 meta.df <- subset(meta.df.all,month(date)==spawn.month &
                               year(date) %in% climatology.yrs)
 

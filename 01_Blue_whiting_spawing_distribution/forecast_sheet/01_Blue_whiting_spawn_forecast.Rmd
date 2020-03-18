@@ -1,6 +1,6 @@
 ---
 title: "Blue Whiting Spawning Habitat Forecast"
-subtitle: 'ICES WGS2D Forecast sheet 01-20190103'
+subtitle: 'ICES WGS2D Forecast sheet 01-20200131'
 output:
   html_document: 
     fig_caption: yes
@@ -31,11 +31,11 @@ htmltools::img(src = knitr::image_uri(file.path("..", "common","WGS2D_logo.png")
                alt = 'logo', 
                style = 'position:absolute; top:0; right:0; padding:10px;')
 ```
-Issued 03-01-2019. Valid through to 01-06-2019. 
+Issued 31-01-2020. Valid through to 01-06-2020. 
 
 Prepared by Mark R. Payne, DTU Aqua, Copenhagen, Denmark. 
 
-This forecast sheet superceeds the previous version 01-20180831, issued 31-08-2018. For details, see the Change Log at the bottom of this document.
+This forecast sheet is the first forecast for the 2020 blue whiting spawning season. An update of this forecast will be issued on or before 1 Marhc 2020. For details, see the Change Log at the bottom of this document.
 
 ```{r }
 #  Setup
@@ -54,15 +54,15 @@ library(png)
 library(grid)
 
 #Configuration
-snapshot.src <- "data/EN4/EN.4.2.1.p.analysis.g10.201811.salinity.nc"
+snapshot.src <- "data/EN4/EN.4.2.1.p.analysis.g10.202001nc"
 sel.core.percent <- 0.2
 sal.isohalines <- c(35.3,35.5)  #psu
 theme_set(theme_bw(base_size = 14))
 
 #Inline strings
-forecast.yr <- 2019
-most.recent.data <- "November 2018"
-lead.time <- "Five months"
+forecast.yr <- 2020
+most.recent.data <- "December 2018"
+lead.time <- "Three months"
 
 
 ```
@@ -70,7 +70,7 @@ lead.time <- "Five months"
 ## Forecast
 The spawning distribution for March `r forecast.yr` is expected to be highly compressed against the continental shelf edge, reflecting the continuing current unusual oceanographic conditions in the region. Minimal spawning on or to the west of Rockall Plateau is expected (Figure 1). In historical terms, the westward extent of spawning is forecast to be among the lowest since 1950 and the spawning area small (Figure 2).
 
-```{r Fig_Forecast_map,fig.cap="**Figure 1. Forecast spawning distribution for blue whiting in March 2019.** *Distribution is represented here as the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder and is plotted as a) the value and b) the anomaly relative to the climatological probability (1960-2010). Probabilities > 0.4 can be considered as the core spawning habitat. The 1000m and 2000m isobaths are added for reference.*"}
+```{r Fig_Forecast_map,fig.cap="**Figure 1. Forecast spawning distribution for blue whiting in March 2020.** *Distribution is represented here as the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder and is plotted as a) the value and b) the anomaly relative to the climatological probability (1960-2010). Probabilities > 0.4 can be considered as the core spawning habitat. The 1000m and 2000m isobaths are added for reference.*"}
 #Figure 1, map of spawning
 #Load objects
 load("objects/metrics.RData")
@@ -211,6 +211,7 @@ Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawn
 
 ## Change Log
 
+* 20200131 Updated to 2020 forecast.
 * 20190103 Updated. Forecast verification for 2018 included.
 * 20180831 Updated to 2019 forecast.
 * 20180301.v03.0 Updated EN4 data set to 4.2.1. Added forecast expressed as an anomaly. Added "forecast basis" summary table. Added supplementary information comparing with survey track and current oceanographic state. Add PSY4 reanalysis product into mix.
