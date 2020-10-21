@@ -64,11 +64,13 @@ The portfolio forecast (for recruitment summed across all four stocks) indicates
 #'========================================================================
 # Setup ####
 #'========================================================================
-load(here("objects/Forecast_sheet_metrics.RData"))
+load("objects/Forecast_sheet_metrics.RData")
 #load("objects/Forecast_sheet_metrics.RData")
 
 order.area <- c("Area 1", "Area 2", "Area 3", "Area 4", "Portfolio")
 order.terc <- c("High", "Medium", "Low")
+norm.fact <- 10^6
+
 
 # Labels --------------------------------------------------------------------------
 # terc.labels <- 
@@ -96,6 +98,7 @@ prop.correct <-
   mutate(Area=gsub("_", " ", gsub("Sandeel_", "", ID))) %>% 
   mutate(Area=factor(Area,levels=order.area)) %>%
   arrange(model)
+
 
 cl.mdl <- cl.mdl %>% 
   mutate(Tercile=factor(Tercile,levels=order.terc))
@@ -129,23 +132,108 @@ forecast.plt <- rbind(area1.plt, area2.plt, port.plt)
 
 forecast.plt$prob.lbl <- ifelse(forecast.plt$prob.lbl == 0, 5, forecast.plt$prob.lbl)
 
-ggplot(forecast.plt)+
-  geom_bar(aes(x=lbl, y=prob.lbl, fill=lbl), 
-           colour="black", stat = "identity", width = 1, 
-           position = position_stack(reverse = TRUE))+
-  geom_text(aes(x=lbl,y= ifelse(prob.lbl == 5, prob.lbl+35, prob.lbl+15), 
-                      label=ifelse(prob.lbl == 5, paste0("Less than ", prob.lbl, "%"), paste0(prob.lbl, "%"))))+
-  scale_fill_brewer(palette = "BrBG") +
-  coord_flip(ylim = c(0,125)) +
-  facet_wrap(~model, ncol=5) +
-  scale_x_discrete(limits = rev(levels(forecast.plt$lbl))) +
-  scale_y_continuous(breaks = c(0,25,50,75,100)) +
-  labs(x = "Recruitment terciles", 
-       y = "Probability [%]", 
-       fill="")+
-  theme(panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank(), 
-        panel.grid.minor.x = element_blank(), legend.position = "none")
+# ggplot(forecast.plt)+
+#   geom_bar(aes(x=lbl, y=prob.lbl, fill=lbl), 
+#            colour="black", stat = "identity", width = 1, 
+#            position = position_stack(reverse = TRUE))+
+#   geom_text(aes(x=lbl,y= ifelse(prob.lbl == 5, prob.lbl+35, prob.lbl+15), 
+#                       label=ifelse(prob.lbl == 5, paste0(prob.lbl, "% or less"), paste0(prob.lbl, "%"))))+
+#   scale_fill_brewer(palette = "BrBG") +
+#   coord_flip(ylim = c(0,125)) +
+#   facet_wrap(~model, ncol=5) +
+#   scale_x_discrete(limits = rev(levels(forecast.plt$lbl))) +
+#   scale_y_continuous(breaks = c(0,25,50,75,100)) +
+#   labs(x = "Recruitment terciles", 
+#        y = "Probability [%]", 
+#        fill="")+
+#   theme(panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank(), 
+#         panel.grid.minor.x = element_blank(), legend.position = "none")
 
+tercs <- terc.probs %>%
+  as_tibble() %>% 
+  filter(model == "Aggregated_1_2_MuMIn_MeanQuarterSST" |#%>% #|
+        model == "Sandeel_Area_1_MuMIn_MeanQuarterSST" |
+        model == "Sandeel_Area_2_MuMIn_MeanQuarterSST") %>% 
+  mutate(Area=gsub("_", " ", gsub("Sandeel_", "", ID))) %>% 
+  rowwise() %>% 
+  mutate(draws = list(log(draws*norm.fact)), terc.u = log(terc.u*norm.fact),terc.l = log(terc.l*norm.fact) )
+
+area1.draws <- approx(density(na.omit(tercs$draws[[1]]), bw = "SJ"), n = 1000) %>%
+  as_tibble() %>% 
+  mutate(model = "Area 1r")
+area2.draws <- approx(density(na.omit(tercs$draws[[2]]), bw = "SJ"), n = 1000) %>%
+  as_tibble() %>% 
+  mutate(model = "Area 2r")
+
+port.draws <- approx(density(na.omit(tercs$draws[[3]]), bw = "SJ"), n = 1000) %>%
+  as_tibble() %>% 
+  mutate(model = "Portfolio"
+         )
+
+dat <- rbind(area1.draws, area2.draws, port.draws)
+
+terc.l <- list()
+terc.l[["Area 1r"]] <- tercs$terc.l[[1]]
+terc.l[["Area 2r"]] <- tercs$terc.l[[2]]
+terc.l[["Portfolio"]] <- tercs$terc.l[[3]]
+
+terc.u <- list()
+terc.u[["Area 1r"]] <- tercs$terc.u[[1]]
+terc.u[["Area 2r"]] <- tercs$terc.u[[2]]
+terc.u[["Portfolio"]] <- tercs$terc.u[[3]]
+
+dat.l <- dat %>% 
+  dplyr::rowwise() %>%
+  dplyr::filter(x < terc.l[[model]]) %>% 
+  group_by(model) %>% 
+  mutate(max = max(x))
+
+dat.m <- dat %>% 
+  rowwise() %>% 
+  dplyr::filter(x > terc.l[[model]] & x < terc.u[[model]]) %>%
+  group_by(model) %>% 
+  mutate(max = max(x))
+
+dat.h <- dat %>% 
+  rowwise() %>% 
+  filter(x > terc.u[[model]])
+
+label.x <- c(17.5, 18.55, 19.5,16, 17.7, 18.9,18, 19, 20)
+label.y <- c(0.4, 0.4, 0.4, 0.3, 0.3, 0.3,0.4, 0.4, 0.4)
+
+ggplot(data = dat) +
+  facet_wrap(~model, scale="free_y")+
+  geom_ribbon(data=dat.l,
+              aes(x=x,ymax=y, fill="3. Low"),ymin=0, alpha=1)+
+  geom_ribbon(data=dat.h,
+              aes(x=x,ymax=y,fill="1. High"),ymin=0, alpha=1)+
+  geom_ribbon(data=dat.m,
+              aes(x=x,ymax=y, fill="2. Medium"),ymin=0, alpha=1)+
+  geom_line(aes(x = x, y = y)) +
+  scale_fill_manual("Predicted Tercile", values=c("#d8b365","#f5f5f5","#5ab4ac"))+
+  geom_vline(data=dat.l, aes(xintercept = max), color = "grey", linetype = "dashed")+
+  geom_vline(data=dat.m, aes(xintercept = max), color = "grey", linetype = "dashed") +
+  #scale_fill_brewer(palette = "BrBG") +
+  geom_text(data=forecast.plt,aes(x=label.x,y=label.y, 
+                      label=ifelse(prob.lbl == 5, paste0(prob.lbl, "% or less"), paste0(prob.lbl, "%"))))+
+  
+  coord_trans(x = 'log10')+
+  scale_x_continuous(breaks=c(16.1181, 16.81124, terc.l[["Area 2r"]], terc.l[["Area 1r"]], 
+                              terc.u[["Area 2r"]], terc.l[["Portfolio"]], terc.u[["Area 1r"]], 
+                              terc.u[["Portfolio"]], 20.03012, 20.72327),
+                     labels=round(c(exp(16.1181)/norm.fact, exp(16.81124)/norm.fact, 
+                                    exp(terc.l[["Area 2r"]]) / norm.fact, exp(terc.l[["Area 1r"]]) / norm.fact, 
+                                    exp(terc.u[["Area 2r"]]) / norm.fact, exp(terc.l[["Portfolio"]]) / norm.fact,
+                                    exp(terc.u[["Area 1r"]]) / norm.fact, exp(terc.u[["Portfolio"]]) / norm.fact, 
+                                    exp(20.03012)/norm.fact, exp(20.72327)/norm.fact)))+
+ # scale_y_continuous(breaks=c(0.20,0.60),
+  #                    labels=c("Forecast December 2018", "HAWG Assessment 2019"))+
+  coord_flip(ylim = c(0,.75), xlim= c(13,21),expand=FALSE)+
+  xlab("Recruitment [10^9 indiv.]")+
+  ylab("")+
+  theme(panel.grid.major.y = element_blank(), panel.grid.minor.y = element_blank(), 
+        panel.grid.minor.x = element_blank(), panel.grid.major.x = element_blank(),
+        axis.ticks.x = element_blank(), axis.text.x = element_blank())
 ```
 
 ## How to use this forecast
@@ -286,7 +374,7 @@ Areas 1r and 2r show the best performance of the individual forecasts (just over
 It is also important to examine the forecast skill for each category, and its ability to correctly distinguish between the occurrence and absence of an event (and thus avoid false alarms). Forecast skill was therefore also measured using the so-called True Skill Score, TSS (also known as the Peirce Skill Score). The metric ranges between +1 and -1, with a value of 0 corresponding to random guessing (Figure 5).
 
 
-```{r Skill_assessment_II, fig.cap="**Figure 5. Skill assessment by category.** *(a) The skill of the recruitment forecast system in predicting each of high, medium, and low recruitments is shown for all individual areas and the portfolio forecast. (b) The skill shown according to recruitment terciles is shown. Model skill is represented as the True (Peirce) Skill Score (TSS), which ranges between +1 and -1, and has a value of 1 for perfect skill, and 0 for random guessing (black dashed line). The 95% confidence interval for the estimated skill score are shown as error bars on each of the points.*", dpi=300}
+```{r Skill_assessment_II, fig.cap="**Figure 5. Skill assessment by category.** * The skill shown according to recruitment terciles. Model skill is represented as the True (Peirce) Skill Score (TSS), which ranges between +1 and -1, and has a value of 1 for perfect skill, and 0 for random guessing (black dashed line). The 95% confidence interval for the estimated skill score are shown as error bars on each of the points.*", dpi=300}
 tss.metrics.plt <- 
   tss.metrics %>%
   mutate(Tercile=factor(tercile,levels=rev(levels(tercile))),
@@ -304,19 +392,49 @@ ggplot(data=tss.metrics.plt,
   scale_shape_manual(values=c(21, 22, 23, 24, 25))+
   scale_colour_brewer(palette = "Set2") +
   scale_fill_brewer(palette = "Set2") +
-  scale_y_continuous(labels = rep("", 5), breaks = seq(-1,1,.5), expand = c(0,0))+
+  #scale_y_continuous(labels = rep("", 5), breaks = seq(-1,1,.5), expand = c(0,0))+
   coord_cartesian(ylim = c(-1,1)) +
   guides(fill="legend")+
-  labs( x= "Recruitment tercile", y = "") +
+  labs( x= "Recruitment tercile", y = "True Skill Score") +
   theme(legend.position="bottom", 
         panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank()) +
-  annotate("text",x=0.6,y=0.9, label="b)",colour="black")
+        panel.grid.minor.x = element_blank())
   
 #print(tss1)
 ```
 
 This result shows that we see large differences between areas, with only area 1r consistently outperforming random guessing consistently across all terciles. The portfolio forecast also performs well for low recruitment. This should be borne in mind when interpreting the forecast.
+
+## Forecast drivers
+
+To understand the drivers behind the current forecast, each predictor in the 2020 forecast data can be compared to a baseline forecast. As both demographic and environmental as expressed as anomalies, all baseline forecasts are initialized as the 0 anomaly of a given predictor. Environmental anomalies are calculated from climatology, based on the entire available time series in OISST. Demographic anomalies are calculated as the anomaly in log units based on the last 25 years of observations. The time-variation baseline is set to 2007, which is the first year of retrospective forecasting. Comparing the forecasts to the baseline, can provide a relative response, indicating the effect of a predictor on the current forecast (See figure 6). Here all demographic predictors, except spawning stock biomass, and all environmental predictors are grouped together. A relative response between 0 and 1 shows a negative effect on recruitment, while above 1 indicates a positive effect. 
+
+```{r Forecast_driver, fig.cap="**Figure 6. Relative response on recruitment for given predictor or group of predictors.** *Relative response for a predictor shows the effect of that predictor on the current forecast compared to a baseline. This effectively gives insight to what drives the current forecast. A relative response between 0 and 1 shows a negative effect on the recruitment, while above 1 shows a positive effect. A relative response of 1 indicates no difference compared to the baseline. Environmental and demographic predictors are grouped to show the overall effect.*", dpi=300}
+log.grp <- log.response %>% 
+  dplyr::select(model, var, Response) %>% 
+  pivot_wider(names_from = var, values_from = Response) %>% 
+  mutate(Environment = P3 + P4 + Q1 + Q2 + Q3,
+         Demography = logTSB + logSumN + logN1) %>% 
+  dplyr::select(model, Environment, Demography, logSSB, Cohort) %>% 
+  pivot_longer(!model ,names_to = "Predictor", values_to = "Response") %>% 
+  mutate(Predictor=factor(Predictor, levels=c("Cohort", "logSSB", "Demography", "Environment")), Area = model) 
+
+brks <- c(-1, -0.5, 0, 0.5, 1)
+
+ggplot(log.grp) +
+facet_wrap(~Area) +
+  geom_bar(aes(x = Predictor, y = Response, fill = Area), stat="identity", colour="black", width = 0.9)+
+  scale_fill_brewer(palette = "Set2") +
+  geom_hline(aes(yintercept = 0), colour = "grey", linetype = "dashed") +
+  #geom_errorbar( aes(x=var, ymin=lower , ymax=upper), width=0.3, colour="orange", alpha=1, size=0.8) +
+  coord_flip() + 
+  ylab("Relative response") + 
+  scale_y_continuous(breaks=brks,
+                     labels=round(exp(brks), 1), limits = c(-1, 1))
+
+```
+
+From the analysis of area 1r and 2r, the 2020 forecast shows a very strong time effect, with the overall productivity of the system being close to half of the 2007 productivity. Area 1r shows a small negative effect due to environmental factors, while the demography has a small increase. The same environmental effect is seen in area 2r, while a large negative demographic effect is seen. The spawning stock biomass has almost no effect on the recruitment predictions. Combining the two large negative effects in area 2r results in the very low recruitment prediction, while the low area 1r prediction is mainly driven by the overall shift in productivity.
 
 <!-- ## Assigning economic value -->
 
@@ -379,7 +497,7 @@ This result shows that we see large differences between areas, with only area 1r
 
 ## Quality Considerations
 
-The skill of this forecast model has been evaluated in a realistic setting over the period 2006-2019. However, good historical forecast performance does not guarantee future forecast performance, and forecast skill can and does change over time. On the other hand, this forecast is based on a model parameterised over the full time-series of available data, and its performance should therefore be better than other models in the forecast evaluation scheme. It is important to note, none-the-less, that the reliability of any forecast scheme can only be evaluated over several iterations of use.
+The skill of this forecast model has been evaluated in a realistic setting over the period 2007-2019. However, good historical forecast performance does not guarantee future forecast performance, and forecast skill can and does change over time. On the other hand, this forecast is based on a model parameterised over the full time-series of available data, and its performance should therefore be better than other models in the forecast evaluation scheme. It is important to note, none-the-less, that the reliability of any forecast scheme can only be evaluated over several iterations of use.
 
 Various authors have highlighted the effect of *C. finmarchicus* and *T. longicornis* on recruitment to this species (van Deurs et al 2009; Lindegren et al 2018). However, it is not possible to include these variables in the forecasts due to the lag between collecting these samples and when they are first made available. However, exploratory analyses based on the subset of the data for which these variables are available have shown that they do not make major contributions to the forecast skill.
 
