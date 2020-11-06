@@ -57,11 +57,11 @@ discretise <- function(x,lvls,fmt,limits=c(TRUE,TRUE)) {
 #Region of interest
 years.ROI <- 1950:2018
 climatology.yrs <- 1960:2010
-spatial.ROI <- extent(-21,0,44,65)
 spawn.month <- 3  #Peak spawning in march, even though we observe peak larvae
                   #later in April.
 spawn.depth <- c(250,600)
-oceanography.ROI <- extent(-20,0,50,60)  #Focus on spawning region
+ts.ROI <- extent(-20,-5,50,60)  #Focus on spawning region. Note that this needs to be matched
+                                #with analysis from PredEng
 
 #Directories
 EN4.data.dir <- "data/EN4"

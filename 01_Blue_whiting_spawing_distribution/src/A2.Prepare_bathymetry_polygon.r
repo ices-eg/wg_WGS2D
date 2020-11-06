@@ -1,16 +1,14 @@
 ###########################################################################
-# Explore_metrics
+# Prepare bathymetry_data
 # ==========================================================================
 #
 # by Mark R Payne  
 # DTU-Aqua, Kgs. Lyngby, Denmark  
 # http://www.staff.dtu.dk/mpay  
 #
-# Created Wed Jan 10 23:17:53 2018
+# Created Mon Jan  8 12:06:41 2018
 # 
-# Does a basic data exploration on some of the spawning area metrics to
-# get a better understanding of how they depend on, for example, the 
-# definition of core spawning percentile.
+# Prepares a polygon mask for use in extracting a region of interest
 #
 # This work is subject to a Creative Commons "Attribution" "ShareALike" License.
 # You are largely free to do what you like with it, so long as you "attribute" 
@@ -25,59 +23,62 @@
 #==========================================================================
 # Initialise system
 #==========================================================================
-cat(sprintf("\n%s\n","Explore_metrics"))
+cat(sprintf("\n%s\n","Prepare bathymetry data"))
 cat(sprintf("Analysis performed %s\n\n",base::date()))
 
 #Do house cleaning
-rm(list = ls(all.names=TRUE));  graphics.off();
-start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
+start.time <- proc.time()[3]; 
 
 #Helper functions, externals and libraries
 log.msg <- function(fmt,...) {cat(sprintf(fmt,...));
   flush.console();return(invisible(NULL))}
 
+library(raster)
+library(sf)
+library(tidyverse)
 source("src/00.Common_elements.r")
-library(ggplot2)
-library(tidyr)
-library(dplyr)
-library(tibble)
 
 #==========================================================================
 # Configure
 #==========================================================================
-#Load metrics
-load("objects/metrics.RData")
+#ETOPO1 directory
+ETOPO1.fname <- "resources/ETOPO1_Bed_c_gmt4.grd"
+
+global.raster <- readRDS(here("objects/global_ROI.rds"))
 
 #==========================================================================
-# Some basic visualisation plots
+# Process raster
 #==========================================================================
-#Visualise the time series for each core percentile
-plt.dat <- metrics %>% select(starts_with("ptile"),core.percentiles,date) %>%
-            gather(variable,value,-date,-core.percentiles) %>%
-            transform(core=factor(core.percentiles))
-g <- ggplot(plt.dat,aes(x=date,y=value,
-                        col=core,linetype=core)) +
-      geom_line() +
-      facet_grid(variable~.,scale="free_y")
-print(g)
+log.msg("Processing raster...\n")
+#Setup raster
+bath.raw <- raster(ETOPO1.fname)
 
-#Now calculate the variance of each time series for each percentile
-sd.df <- tapply(plt.dat$value,plt.dat[,c("core","variable")],sd) %>%
-          as.data.frame() %>%
-          rownames_to_column("core")
-mean.df <- tapply(plt.dat$value,plt.dat[,c("core","variable")],mean) %>%
-  as.data.frame() %>%
-  rownames_to_column("core")
-dat.df <- merge(sd.df,mean.df,by="core",suffixes=c(".sd",".mean"))
-dat.df$area.sd.norm <- dat.df$ptile.area.sd / dat.df$ptile.area.mean
+#Crop - with a bit of fluff around the outside
+spatial.ROI.fluff <- extend(global.raster,y = c(2,2))
+bath.crop <- raster::crop(bath.raw,spatial.ROI.fluff,snap="out")
 
-#Now plot
-plot(dat.df$area.sd.norm,dat.df$ptile.westward.sd,type="b",pch=NA)
-text(dat.df$area.sd.norm,dat.df$ptile.westward.sd,dat.df$core,cex=0.8)
+#==========================================================================
+# Process polygon
+#==========================================================================
+log.msg("Creating bathymetry polygon...\n")
+#Re-aggregate to a relatively fine resolution, chosen arbitrarily
+#in the sake of sanity e.g. 0.125
+bath.coarse <- aggregate(bath.crop,fact=0.125/res(bath.raw),fun=median)
 
+#Create a closed polygon at the min spawn depth for extraction
+bath.coarse[] <- ifelse(abs(bath.coarse[])> min(spawn.depth),1,NA)
+bath.poly <- 
+  rasterToPolygons(bath.coarse,dissolve = TRUE) %>%
+  st_as_sf()
 
-                        
+#Extract an open polyline for use in plotting
+bath.plot <- 
+  rasterToContour(bath.crop,levels=c(-min(spawn.depth),-2000)) %>%
+  st_as_sf()
 
+#Save objects
+saveRDS(bath.poly,file="objects/bathymetry_poly_spawn.rds")
+saveRDS(bath.plot,file="objects/bathymetry_poly_plot.rds")
 
 #==========================================================================
 # Complete

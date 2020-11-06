@@ -28,7 +28,6 @@ cat(sprintf("\n%s\n","Generate_oceanographic_timeseries"))
 cat(sprintf("Analysis performed %s\n\n",base::date()))
 
 #Do house cleaning
-rm(list = ls(all.names=TRUE));  graphics.off();
 start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
 
 #Helper functions, externals and libraries
@@ -37,46 +36,41 @@ library(tidyverse)
 library(tibble)
 library(stringr)
 library(lubridate)
+library(here)
+library(sf)
+library(here)
 
 #==========================================================================
 # Setup file lists
 #==========================================================================
+#Import configuration
+CMEMS.cfgs <- readRDS("objects/CMEMS_cfgs.rds")
 
-#Get list of EN4 data files
-EN4.fnames <- dir( EN4.data.dir,full.names = TRUE,pattern="nc$")
-EN4.meta <- tibble(source="EN4",
-                   varname="salinity",
-                   fname=EN4.fnames,
-                      date.str=str_extract(EN4.fnames,"[0-9]{6}"),
-                      date=ymd(paste0(date.str,"01")))
-
-#Get list of PSY4 files
-PSY4.fnames <- dir(PSY4.data.dir,full.names = TRUE,pattern="nc$")
-PSY4.meta <- tibble(source="PSY4",
-                    varname="so",
-                    fname=PSY4.fnames,
-                   date.str=str_extract(PSY4.fnames,"[0-9]{8}"),
-                   date=ymd(date.str)) %>%
-            subset(!grepl("snapshot",fname))
-
-#Merge
-meta.df <- rbind(EN4.meta,PSY4.meta)
+#Get list of files for each source
+meta.df <- 
+  tibble(name=names(CMEMS.cfgs),
+         dat.dir=map_chr(CMEMS.cfgs,slot,"out.dir"),
+         flat.dir=file.path(dat.dir,"..","flattened"),
+         fname=map(flat.dir,dir,full.names=TRUE,pattern="nc$")) %>%
+  unnest(fname) %>%
+  mutate(date.str=str_extract(basename(fname),"[0-9]{8}"),
+         date=ymd(date.str)) %>%
+  select(-dat.dir,-flat.dir,-date.str) 
 
 #==========================================================================
 # Process files
 #==========================================================================
 #Setup polygon to delineate depth regions
-load("objects/bathymetry.RData")
+bath.poly <- readRDS(here("objects/bathymetry_poly_spawn.rds"))
 
 #Loop over files
 meta.df$salinity <- as.double(NA)
+pb <- progress_estimated(nrow(meta.df))
 for(i in seq(nrow(meta.df))) {
-  log.msg("Processing %s...\n",basename(meta.df$fname[i]))
+  pb$print()
+
   #Setup raster
-  r <- raster(meta.df$fname[i],varname=meta.df$varname[i])
-  
-  #Resize to appropriate ROI
-  r <- raster::crop(r,oceanography.ROI)
+  r <- raster(meta.df$fname[i])
   
   #Mask with bathymetry
   r.masked <- mask(r,bath.poly)
@@ -88,12 +82,17 @@ for(i in seq(nrow(meta.df))) {
   
   #Store
   meta.df$salinity[i] <- mean.val
+  
+  pb$tick()
 
 }
 
-ocean.dat.df <- meta.df
+meta.df %>%
+  separate(name,c("model","type"),sep="\\.",remove=FALSE) %>%
+  saveRDS(file=here("objects/ocean_data.rds"))
 
-save(ocean.dat.df,file="objects/ocean_data.RData")
+ggplot(meta.df,aes(x=date,y=salinity,colour=name))+
+         geom_line()
 
 #==========================================================================
 # Complete

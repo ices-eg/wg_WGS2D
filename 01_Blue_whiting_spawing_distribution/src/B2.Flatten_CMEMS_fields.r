@@ -1,5 +1,5 @@
 ###########################################################################
-# Extract PSY4 timeseries data
+# Flatten CMEMS data
 # ==========================================================================
 #
 # by Mark R Payne  
@@ -23,7 +23,7 @@
 #==========================================================================
 # Initialise system
 #==========================================================================
-cat(sprintf("\n%s\n","Extract timeseries data"))
+cat(sprintf("\n%s\n","Flatten CMEMS Data"))
 cat(sprintf("Analysis performed %s\n\n",base::date()))
 
 #Do house cleaning
@@ -35,6 +35,8 @@ source("src/00.Common_elements.r")
 library(tidyverse)
 library(ncdf4)
 library(RCMEMS)
+library(ClimateOperators)
+library(here)
 
 #==========================================================================
 # Configure
@@ -42,13 +44,22 @@ library(RCMEMS)
 #Directories
 tmp.dir <- tempdir()
 
-wt.vertical.ave <- TRUE   #Do the vertical averaging with weighted means? Or simple arithmetics?
-
 #'========================================================================
 # Setup ####
 #'========================================================================
 #Import timeseries configurations
-load("objects/Timeseries_configurations.RData")
+CMEMS.cfgs <- readRDS("objects/CMEMS_cfgs.rds")
+
+#Setup vertical coordinates
+vert.layers <- seq(min(spawn.depth),max(spawn.depth),by=5)
+
+#Setup grid description by copying the EN4 grid
+global.raster <- readRDS(here("objects/global_ROI.rds"))
+griddes.fname <- "data/grid_descriptor.txt"
+writeLines(griddes(global.raster),griddes.fname)
+
+#Rewrite all
+reprocess.all <- FALSE
 
 #==========================================================================
 # Process files
@@ -56,17 +67,22 @@ load("objects/Timeseries_configurations.RData")
 #Loop over models
 for(mdl in names(CMEMS.cfgs)) {
   #Import meta data
-  meta.db <- readRDS(file.path(CMEMS.cfgs[[mdl]]@out.dir,"..","database_metadata.RData"))
+  this.CMEMS <- CMEMS.cfgs[[mdl]]
+  meta.db <- readRDS(file.path(this.CMEMS@out.dir,"..","database_metadata.rds"))
   #Get list of available files
-  extr.dir <- file.path("data",mdl,"extraction")
-  mdl.db <- tibble(fname=dir(CMEMS.cfgs[[mdl]]@out.dir,pattern="nc$",full.names = TRUE),
+  flat.dir <- file.path("data",mdl,"flattened")
+  mdl.db <- tibble(fname=dir(this.CMEMS@out.dir,pattern="nc$",full.names = TRUE),
                    src.date=file.mtime(fname),
-                   ex.fname=file.path(extr.dir,basename(fname)),
+                   ex.fname=file.path(flat.dir,basename(fname)),
                    ex.exists=file.exists(ex.fname),
                    ex.date=file.mtime(ex.fname))
   
   #Compare databases
-  src.to.process <- filter(mdl.db,!ex.exists | src.date > ex.date )
+  if(reprocess.all) {
+    src.to.process <- mdl.db
+  } else {
+    src.to.process <- filter(mdl.db,!ex.exists | src.date > ex.date )
+  }
   n.to.process <- nrow(src.to.process) 
   if(n.to.process==0) {
     log.msg("No files to process for %s...\n",mdl)
@@ -74,7 +90,7 @@ for(mdl in names(CMEMS.cfgs)) {
   }
   
   #Check that directory exists
-  if(!dir.exists(extr.dir)) dir.create(extr.dir,recursive=TRUE)
+  if(!dir.exists(flat.dir)) dir.create(flat.dir,recursive=TRUE)
   
   
   pb <- progress_estimated(n.to.process)
@@ -82,40 +98,21 @@ for(mdl in names(CMEMS.cfgs)) {
 
   #Loop over files
   for(i in seq(n.to.process)) {
-    pb$tick()$print()
+    pb$print()
     f <- src.to.process[i,]
-
-    #Loop over variables
-    extr.vars <- CMEMS.cfgs[[mdl]]@variable
-    for(v in extr.vars) {
-      #Process using raster
-      b.raw <- brick(f$fname,varname=v,lvar=4)
-      
-      #Get vertical layers
-      layer.midpoints <- getZ(b.raw)
-      layer.bnds <- c(0,approx(seq(layer.midpoints)-0.5,layer.midpoints,
-                               seq(layer.midpoints))$y)
-      layer.thickness <- diff(layer.bnds)
-      layer.idxs <- which(layer.midpoints > min(spawn.depth) & layer.midpoints < max(spawn.depth))
-      
-      #Drop vertical layers that we don't need
-      b <- b.raw[[layer.idxs]]
-      #Average in the vertical
-      if(wt.vertical.ave) {
-        b <- weighted.mean(b,layer.thickness[layer.idxs])
-      } else {
-        b <- mean(b,na.rm=TRUE)
-      }
-      #For cases where we are shallower than the shallowest layer, we use the bottom salinity
-      bottom.idx <- sum(!is.na(b.raw))
-      bottom.val <- stackSelect(b.raw,bottom.idx,type="index")
-      b <- cover(b,bottom.val)   #Replaces NAs in b with bottom values
-      #Write the raster out for further use
-      writeRaster(b,filename = f$ex.fname,overwrite=TRUE)
-    }
+    
+    #Interpolate vertically, average and remap
+    cmd <- cdo("--silent -W",
+               csl("remapbil",griddes.fname),
+               "-vertmean",
+               csl("-intlevel",vert.layers),
+               f$fname,
+               f$ex.fname)
+    
+    pb$tick()
   }
   #Finish off timer
-  pb$stop()
+  pb$stop()$print()
   log.msg("\n")
   
 }
