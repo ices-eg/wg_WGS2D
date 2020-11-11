@@ -31,89 +31,79 @@ start.time <- proc.time()[3];
 #Helper functions, externals and libraries
 source("src/00.Common_elements.r")
 library(tidyverse)
-library(stringr)
+library(magrittr)
 library(lubridate)
+library(here)
+library(RSQLite)
+library(raster)
 
 #'========================================================================
 # Configuration ####
 #'========================================================================
-predEng.dir <- "resources/BW-Salinity//"  #Directory containing results for BW from PredEng
+predEng.db <- here("data/PredEng/Blue_whiting_WGS2D.sqlite")  #Directory containing results for BW from PredEng
 
 #==========================================================================
 # Setup
 #==========================================================================
 #Get and filter list of statistics
-stats.cfg <- 
-  readRDS(file.path(predEng.dir,"Statistics","Stats_configuration.rds"))  %>%
-  unnest(data) 
+this.db <- dbConnect(RSQLite::SQLite(), predEng.db)
+stats.tbl <- 
+  tbl(this.db,"statistics") 
 
-stats.l <- 
-  stats.cfg %>%
-  filter(src.type %in% c("Observations","Persistence")) %>%
-  mutate(stats= purrr::map(res.fname, ~ readRDS(file.path(predEng.dir,"Statistics",.x)))) 
-
+obs.stats <- 
+  stats.tbl %>%
+  filter(srcType =="Observations")
 
 #'========================================================================
 # Field predictions ####
 #'========================================================================
-#Extract the SDM predictions 
-stat.extract <- function(...) {
-  stats.l %>%
-    filter(...) %>% 
-    select(stats) %>%
-    unnest(stats)
+deblob <- function(x) {
+  x %>%
+    mutate(field=map(field,unserialize))
 }
 
 SDM.res <-
-  stat.extract(stat.name=="SDM15Apr") 
+  obs.stats %>%
+  filter(statName=="SDM15Apr") %>%
+  collect() %>%
+  deblob()
 
 EN4.res <-
-  stat.extract(src.name=="EN4",
-               stat.name=="Mean-salinity") 
-
-EN4.SalField <-
-  stat.extract(src.name=="EN4",
-               stat.name=="SalField") 
-
-#Extract ROIs
-global.ROI <-
-  EN4.SalField %>%
-  pull(field) %>%
-  extract2(1)
+  obs.stats %>%
+  filter(srcName=="EN4",
+         statName=="Mean-salinity") %>%
+  collect() 
 
 #Calculate the climatology field
 SDM.clim.df <-
   SDM.res %>%
-  filter(src.type=="Observations",
-    year(date) %in% climatology.yrs)
+  filter(srcType=="Observations",
+         year(date) %in% climatology.yrs)
 
 SDM.clim <-
   brick(SDM.clim.df$field) %>%
   mean()
 
 
-
-
-# meta.df <- subset(meta.df.all,month(date)==spawn.month &
-#                               year(date) %in% climatology.yrs)
-# 
-# #Process by type
-# pred.clim <- list()
-# for(typ in unique(meta.df$type)){
-#   #Select
-#   typ.sel <- filter(meta.df,type==typ)
-#   preds.s <- stack(typ.sel$fname)
-#   
-#   #And average
-#   pred.clim[[typ]] <- mean(preds.s)
-# }
-
 #Save results
 saveRDS(SDM.res,file="objects/PredEng_SDM.rds")
 saveRDS(EN4.res,file="objects/EN4_mean_salinity.rds")
-saveRDS(EN4.SalField,file="objects/EN4_salinity_field.rds")
+
 saveRDS(SDM.clim,file="objects/SDM_climatology.rds")
-saveRDS(global.ROI,file="objects/global_ROI.rds")
+
+#'========================================================================
+# Extracted salinity field  ####
+#'========================================================================
+#Most recent EN4 salinity
+mr.EN4 <- 
+  tbl(this.db,"calibration") %>%
+  filter(srcType=="Observations",
+         srcName=="EN4") %>%
+  collect() %>%
+  filter(date==max(date)) %>%
+  mutate(field=map(data,unserialize))
+
+saveRDS(mr.EN4,file="objects/EN4_salinity_field.rds")
 
 #==========================================================================
 # Complete
