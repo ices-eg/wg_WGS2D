@@ -44,62 +44,45 @@ library(here)
 #==========================================================================
 # Configure
 #==========================================================================
-global.raster <- readRDS(here("objects/global_ROI.rds"))
-
 #Time series script
 cfg.scripts <- list()
-cfg.scripts$PSY4 <- 
-  paste("python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> ",
-        "--motu http://nrt.cmems-du.eu/motu-web/Motu --service-id GLOBAL_ANALYSIS_FORECAST_PHY_001_024-TDS ",
-        "--product-id global-analysis-forecast-phy-001-024-monthly --longitude-min -180 ",
-        "--longitude-max 179.9166717529297 --latitude-min -80 --latitude-max 90 ",
-        #--date-min "2018-11-16 00:00:00" --date-max "2018-11-16 00:00:00" 
-        "--depth-min 0.493 --depth-max 0.4942 --variable so --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>")
+cfg.scripts$Mercator <-
+  paste("python",
+        "--motu http://nrt.cmems-du.eu/motu-web/Motu",
+        "--service-id GLOBAL_ANALYSIS_FORECAST_PHY_001_024-TDS",
+        "--product-id global-analysis-forecast-phy-001-024-monthly",
+        "--variable so")
 
-#CORIOLIS is on an irregular latitudinal grid, so it doesn't play very nicely with the rest of the processing chain
-#which is based on the raster package
 cfg.scripts$CORIOLIS.NRT <-
-  paste("python -m motuclient",
-        "--motu http://nrt.cmems-du.eu/motu-web/Motu --service-id INSITU_GLO_TS_OA_NRT_OBSERVATIONS_013_002_a-TDS",
-        "--product-id CORIOLIS-GLOBAL-NRTOA-OBS_TIME_SERIE --longitude-min -180 --longitude-max 179.5",
-        "--latitude-min -77.0104751586914 --latitude-max 89.8962631225586",
-        #--date-min "2020-02-15 00:00:00" --date-max "2020-02-15 00:00:00"
-        "--depth-min -1 --depth-max 1 --variable PSAL",
-        "--out-dir <OUTPUT_DIRECTORY> --out-name <OUTPUT_FILENAME> --user <USERNAME> --pwd <PASSWORD>")
+  paste("python",
+        "--motu http://nrt.cmems-du.eu/motu-web/Motu",
+        "--service-id INSITU_GLO_TS_OA_NRT_OBSERVATIONS_013_002_a-TDS",
+        "--product-id CORIOLIS-GLOBAL-NRTOA-OBS_TIME_SERIE",
+        "--variable PSAL")
 
 cfg.scripts$CORIOLIS.REP <-
-  paste("python -m motuclient",
-        "--motu http://my.cmems-du.eu/motu-web/Motu --service-id INSITU_GLO_TS_OA_REP_OBSERVATIONS_013_002_b-TDS",
-        "--product-id CORIOLIS-GLOBAL-CORA-OBS_FULL_TIME_SERIE --longitude-min -180 --longitude-max 179.5",
-        "--latitude-min -77.0104751586914 --latitude-max 89.8962631225586",
-        #--date-min "2018-11-15 00:00:00" --date-max "2018-11-15 00:00:00"
-        "--depth-min 0 --depth-max 2  --variable PSAL",
-        "--out-dir <OUTPUT_DIRECTORY> --out-name <OUTPUT_FILENAME> --user <USERNAME> --pwd <PASSWORD> ")
+  paste("python --motu http://my.cmems-du.eu/motu-web/Motu",
+        "--service-id INSITU_GLO_TS_OA_REP_OBSERVATIONS_013_002_b-TDS",
+        "--product-id CORIOLIS-GLOBAL-CORA-OBS_FULL_TIME_SERIE",
+        "--variable PSAL")
 
-cfg.scripts$ARMOR3D.NRT <- 
-  paste("python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> ",
-        "--motu http://nrt.cmems-du.eu/motu-web/Motu --service-id MULTIOBS_GLO_PHY_NRT_015_001-TDS ",
-        "--product-id dataset-armor-3d-nrt-weekly --longitude-min 0.125 --longitude-max -0.125 ",
-        "--latitude-min -82.125 --latitude-max 89.875 ",
-        #--date-min "2019-02-27 00:00:00" --date-max "2019-02-27 00:00:00" 
-        "--depth-min -1 --depth-max 1 --variable so --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>")
+cfg.scripts$ARMOR3D.NRT <-
+  paste("python --motu http://nrt.cmems-du.eu/motu-web/Motu",
+        "--service-id MULTIOBS_GLO_PHY_TSUV_3D_MYNRT_015_012-TDS",
+        "--product-id dataset-armor-3d-nrt-monthly",
+        "--variable so")
 
 cfg.scripts$ARMOR3D.REP <- 
-  paste("python <PATH_TO_MOTUCLIENT_DIR>/motu-client.py --user <USERNAME> --pwd <PASSWORD> ",
-        "--motu http://my.cmems-du.eu/motu-web/Motu --service-id MULTIOBS_GLO_PHY_REP_015_002-TDS ",
-        "--product-id dataset-armor-3d-rep-monthly --longitude-min 0.125 --longitude-max -0.125 ",
-        "--latitude-min -82.125 --latitude-max 89.875 ",
-        #--date-min "2017-11-15 00:00:00" --date-max "2017-11-15 00:00:00" 
-        "--depth-min -1 --depth-max 1 --variable so --out-dir <OUTPUT_DIR> --out-name <OUTPUT_FILENAME>")
+  paste("python --motu http://nrt.cmems-du.eu/motu-web/Motu",
+        "--service-id MULTIOBS_GLO_PHY_TSUV_3D_MYNRT_015_012-TDS",
+        "--product-id dataset-armor-3d-rep-monthly",
+        "--variable so")
 
-cfg.scripts$GLO.CPL <- 
-  paste("python -m motuclient",
-        "--motu http://nrt.cmems-du.eu/motu-web/Motu --service-id GLOBAL_ANALYSISFORECAST_PHY_CPL_001_015-TDS",
-        "--product-id MetO-GLO-PHY-CPL-dm-SAL --longitude-min 0 --longitude-max -0.25",
-        "--latitude-min -83 --latitude-max 89.75",
-        #--date-min "2020-11-14 12:00:00" --date-max "2020-11-14 12:00:00" 
-        "--depth-min -1 --depth-max 1 --variable so --out-dir <OUTPUT_DIRECTORY> --out-name <OUTPUT_FILENAME>",
-        "--user <USERNAME> --pwd <PASSWORD> ")
+# cfg.scripts$GLO.CPL <- 
+#   paste("python --motu http://nrt.cmems-du.eu/motu-web/Motu",
+#         "--service-id GLOBAL_ANALYSISFORECAST_PHY_CPL_001_015-TDS",
+#         "--product-id MetO-GLO-PHY-CPL-dm-SAL",
+#         "--variable so ")
 
 #==========================================================================
 # Download time series data 
@@ -111,12 +94,15 @@ CMEMS.cfgs <- lapply(cfg.scripts,parse.CMEMS.script)
 for(mdl.name in names(cfg.scripts)) {
   log.msg("Now downloading %s...\n",mdl.name)
   #Setup
-  ts.cfg <- CMEMS.cfgs[[mdl.name]] <- 
+  ts.cfg <- 
+    CMEMS.cfgs[[mdl.name]] <- 
     update(CMEMS.cfgs[[mdl.name]],
            script=as.character(NA),
            depth.min="-1",
            depth.max="1000",
-           out.dir=file.path("data",mdl.name,"database"))
+           out.dir=file.path("data",mdl.name,"database"),
+           user="mpayne",
+           pwd="0Ht9r.oATiP4l")
   
   #Check that directory exists
   if(!dir.exists(ts.cfg@out.dir)) dir.create(ts.cfg@out.dir,recursive = TRUE)
@@ -157,7 +143,7 @@ for(mdl.name in names(cfg.scripts)) {
       log.msg("Downloading %s...\n",f$date)
       ts.cfg <- update(ts.cfg,out.name=basename(f$src))
       CMEMS.download(ts.cfg,
-                     ROI=extent(global.raster),
+                     ROI=extract.ROI,
                      date.min=f$date,date.max=f$date)
     }
   }

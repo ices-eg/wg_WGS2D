@@ -55,7 +55,8 @@ meta.df <-
   unnest(fname) %>%
   mutate(date.str=str_extract(basename(fname),"[0-9]{8}"),
          date=ymd(date.str)) %>%
-  select(-dat.dir,-flat.dir,-date.str) 
+  select(-dat.dir,-flat.dir,-date.str) %>%
+  separate(name,c("model","type"),sep="\\.",remove=FALSE) 
 
 #==========================================================================
 # Process files
@@ -72,9 +73,12 @@ for(i in seq(nrow(meta.df))) {
   #Setup raster
   r <- raster(meta.df$fname[i])
   
-  #Mask with bathymetry
-  r.masked <- mask(r,bath.poly)
-  
+  #Mask with bathymetry and ROI
+  r.masked <- 
+    r %>%
+    mask(bath.poly) %>%
+    crop(ts.ROI)
+
   #Perform averaging
   area.r <- area(r.masked)
   area.norm <- cellStats(area.r*!is.na(r.masked),sum)
@@ -88,11 +92,32 @@ for(i in seq(nrow(meta.df))) {
 }
 
 meta.df %>%
-  separate(name,c("model","type"),sep="\\.",remove=FALSE) %>%
   saveRDS(file=here("objects/ocean_data.rds"))
 
 ggplot(meta.df,aes(x=date,y=salinity,colour=name))+
-         geom_line()
+  geom_point()+
+  facet_wrap(~name)
+
+#'========================================================================
+# Extract snapshots ####
+#'========================================================================
+#Add in EN4
+mr.EN4.dat <- 
+  readRDS(here("objects/PredEng_MR_EN4_salinity_field.rds"))%>%
+  mutate(date=ymd(date)) %>%
+  select(model=srcName,date,field)
+  
+
+#Get most recent data
+mr.dat <- 
+  meta.df %>%
+  group_by(model) %>%
+  filter(date==max(date)) %>%
+  mutate(field=map(fname,raster)) %>%
+  select(model,date,field) %>%
+  bind_rows(mr.EN4.dat)
+
+saveRDS(mr.dat,file=here("objects/Salinity_snapshots.rds"))
 
 #==========================================================================
 # Complete

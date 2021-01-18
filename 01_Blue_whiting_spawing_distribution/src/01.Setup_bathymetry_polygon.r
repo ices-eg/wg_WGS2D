@@ -44,8 +44,6 @@ source("src/00.Common_elements.r")
 #ETOPO1 directory
 ETOPO1.fname <- "resources/ETOPO1_Bed_c_gmt4.grd"
 
-global.raster <- readRDS(here("objects/global_ROI.rds"))
-
 #==========================================================================
 # Process raster
 #==========================================================================
@@ -54,7 +52,7 @@ log.msg("Processing raster...\n")
 bath.raw <- raster(ETOPO1.fname)
 
 #Crop - with a bit of fluff around the outside
-spatial.ROI.fluff <- extend(global.raster,y = c(2,2))
+spatial.ROI.fluff <- extend(plot.ROI,y = c(5,5))
 bath.crop <- raster::crop(bath.raw,spatial.ROI.fluff,snap="out")
 
 #==========================================================================
@@ -66,14 +64,14 @@ log.msg("Creating bathymetry polygon...\n")
 bath.coarse <- aggregate(bath.crop,fact=0.125/res(bath.raw),fun=median)
 
 #Create a closed polygon at the min spawn depth for extraction
-bath.coarse[] <- ifelse(abs(bath.coarse[])> min(spawn.depth),1,NA)
+bath.coarse[] <- ifelse(bath.coarse[]< -min(spawn.depth),1,NA)
 bath.poly <- 
   rasterToPolygons(bath.coarse,dissolve = TRUE) %>%
   st_as_sf()
 
 #Extract an open polyline for use in plotting
 bath.plot <- 
-  rasterToContour(bath.crop,levels=c(-min(spawn.depth),-2000)) %>%
+  rasterToContour(bath.crop,levels=c(-1000,-2000)) %>%
   st_as_sf()
 
 #Save objects

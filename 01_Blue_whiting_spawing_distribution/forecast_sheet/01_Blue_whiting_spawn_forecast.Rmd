@@ -1,12 +1,14 @@
 ---
 title: "Blue Whiting Spawning Habitat Forecast"
-subtitle: 'ICES WGS2D Forecast sheet 01-20200131'
+subtitle: 'ICES WGS2D Forecast sheet 01-20210118'
 output:
   html_document: 
     fig_caption: yes
   word_document: 
     fig_caption: yes
     reference_docx: "../../common/word-styles-reference.docx"
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include="FALSE"}
@@ -27,24 +29,18 @@ knitr::opts_knit$set(
 ```
 
 ```{r}
-htmltools::img(src = knitr::image_uri(file.path("..", "common","WGS2D_logo.png")), 
+htmltools::img(src = knitr::image_uri(here::here("..", "common","WGS2D_logo.png")), 
                alt = 'logo', 
                style = 'position:absolute; top:0; right:0; padding:10px;')
 ```
-Issued 31-01-2020. Valid through to 01-06-2020. 
-
-Prepared by Mark R. Payne, DTU Aqua, Copenhagen, Denmark. 
-
-This forecast sheet is the first forecast for the 2020 blue whiting spawning season. An update of this forecast will be issued on or before 1 Marhc 2020. For details, see the Change Log at the bottom of this document.
 
 ```{r }
 #  Setup
 #Configure markdown style, do house cleaning
-rm(list = ls(all.names=TRUE));  graphics.off();
 start.time <- proc.time()[3]; options(stringsAsFactors=FALSE)
 
 #Helper functions, externals and libraries
-source("src/00.Common_elements.r")
+source(here::here("src/00.Common_elements.r"))
 library(raster)
 library(tidyverse)
 library(dplyr)
@@ -52,120 +48,178 @@ library(lubridate)
 library(gridExtra)
 library(png)
 library(grid)
+library(here)
+library(magrittr)
+library(RColorBrewer)
+library(sf)
 
-#Configuration
-snapshot.src <- "data/EN4/EN.4.2.1.p.analysis.g10.202001nc"
-sel.core.percent <- 0.2
-sal.isohalines <- c(35.3,35.5)  #psu
 theme_set(theme_bw(base_size = 14))
+ll.crs <- CRS("+proj=longlat +datum=WGS84 +no_defs")
 
 #Inline strings
-forecast.yr <- 2020
-most.recent.data <- "December 2018"
-lead.time <- "Three months"
+issue.date <- as.Date("2021-01-18")
+forecast.yr <- 2021
+most.recent.data <- "December 2020"
+lead.time <- "Two months"
 
+#Select stats
+stat.sel <- c(field="april15",
+              ts.spName="NorthernComponent")
 
 ```
+
+Forecast sheet `r format(issue.date,"01-%Y%m%d")`. Issued `r format(issue.date,"%d-%m-%Y")`, covering the March `r forecast.yr` spawning distribution.
+
+Prepared by Mark R. Payne, DTU Aqua, Copenhagen, Denmark. 
+
+This forecast sheet is the first forecast for the `r forecast.yr` blue whiting spawning season. An update of this forecast will be issued on or before 12 March 2021. For details, see the Change Log at the bottom of this document.
 
 ## Forecast
-The spawning distribution for March `r forecast.yr` is expected to be highly compressed against the continental shelf edge, reflecting the continuing current unusual oceanographic conditions in the region. Minimal spawning on or to the west of Rockall Plateau is expected (Figure 1). In historical terms, the westward extent of spawning is forecast to be among the lowest since 1950 and the spawning area small (Figure 2).
+The spawning habitat for March `r forecast.yr` is expected to be compressed against the continental shelf edge. Minimal spawning on or to the west of Rockall Plateau is expected (Figure 1). In historical terms, the spawning habitat is forecast to be among the most contracted since 1950 (Figure 2).
 
-```{r Fig_Forecast_map,fig.cap="**Figure 1. Forecast spawning distribution for blue whiting in March 2020.** *Distribution is represented here as the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder and is plotted as a) the value and b) the anomaly relative to the climatological probability (1960-2010). Probabilities > 0.4 can be considered as the core spawning habitat. The 1000m and 2000m isobaths are added for reference.*"}
+```{r Fig_Forecast_map,fig.cap="**Figure 1. Forecast spawning habitat for blue whiting in March 2021.** *Habitat is based on the outputs of an ecological niche model of blue whiting larvae distributions and is converted into a metric of habitat quality, from low to high. The 1000m and 2000m isobaths are added for reference.*"}
+
 #Figure 1, map of spawning
 #Load objects
-load("objects/metrics.RData")
-load("objects/bathymetry.RData")
-load("objects/Prediction_climatology.RData")
+sel.SDM <- readRDS(here("objects/PredEng_Sel_SDM_fields.rds"))
+bath.poly <- 
+  readRDS(here("objects/bathymetry_poly_plot.rds")) %>%
+  st_set_crs(ll.crs)
+CMEMS.cfg <- readRDS(here("objects/CMEMS_cfgs.rds"))
 
-#Setup forecast data
-fname.forecast <- rev(metrics$fname)[1]
-forecast.r <- raster(file.path(pred.dir,fname.forecast))
-forecast.r.df <- raster2df(forecast.r,type=sprintf("a) %s Forecast",forecast.yr))
-forecast.r.df <- subset(forecast.r.df,!is.na(value))
-forecast.r.df$val.rounded <- discretise(forecast.r.df$value,seq(0,0.5,by=0.1),"%0.1f",c(FALSE,TRUE))
+#Select forecast data
+forecast.r <-
+  sel.SDM %>%
+  filter(date==max(date)) %>%
+  filter(resultName==stat.sel["field"],
+         spName=="global.ROI") %>%
+  pull(field) %>%
+  extract2(1)
 
-#Setup climatological data
-pred.anom <- forecast.r - pred.clim
-pred.anom.df <- raster2df(pred.anom,type="b) Anomaly")
-pred.anom.df <- subset(pred.anom.df,!is.na(value))
-pred.anom.df$val.rounded <- discretise(pred.anom.df$value,seq(-0.3,0.3,by=0.1),"%0.1f")
+#Set habitat to zero when water is too shallow
+forecast.r[is.na(forecast.r)] <- 0
 
-#Do plot
-bath.df <- raster2df(-1*bath)
-map.xlims <- extent(forecast.r)[1:2]
-map.ylims <- extent(forecast.r)[3:4]
+#Extract map data
+forecast.map <-
+  rasterToPoints(forecast.r) %>%
+  as_tibble() %>%
+  set_colnames(c("x","y","value")) %>%
+  mutate(type=sprintf("Forecast %i",forecast.yr)) 
 
-p.list <- list()
-p.list$forecast <- ggplot(forecast.r.df,aes(x,y))+
-  geom_raster(aes(fill=val.rounded))+
-  scale_fill_brewer(palette="YlOrRd",direction = 1)+
-  labs(fill="Probability")+
-  theme(legend.position="left")
-
-p.list$anom <- ggplot(pred.anom.df,aes(x,y))+
-  geom_raster(aes(fill=val.rounded))+
-  scale_fill_brewer(palette="RdBu",direction = -1,drop=FALSE)+
-  labs(fill="Anomaly")
-
-for(n in names(p.list)){
-  p.list[[n]] <- p.list[[n]] +
-    facet_wrap(~type)+
-    coord_quickmap(xlim=map.xlims,ylim=map.ylims,expand=FALSE)+
-    geom_contour(data=bath.df,aes(z=value,linetype=factor(..level..)),
-                 breaks=c(1000,2000),col="black")+
-    borders("world",xlim=map.xlims,ylim=map.ylims,
-            fill="black",col="black")+
-    labs(x="",y="",linetype="Depth (m)")
+#Plot
+SDM.plot <- function(d) {
+  
+  ggplot(d)+
+    geom_raster(aes(x,y,fill=value))+
+    facet_wrap(~type)+  
+    geom_sf(data=bath.poly,
+            mapping=aes(linetype=as.character(abs(as.numeric(level)))),
+            col="black")+
+    annotation_map(map_data("world"),fill="black")+
+    labs(fill="Habitat\nquality")+
+    scale_fill_fermenter(palette="YlOrRd",
+                         direction=1,
+                         show.limits=TRUE,
+                         labels=function(x) {
+                           if(length(x)==2) {
+                             c("Lowest","Highest") 
+                           } else {
+                             rep("",length(x))
+                           }})+
+    scale_size_manual(values=c(0.5,0.25))+
+    coord_sf(xlim=c(-20,0), #Boundary edge effects apparent byond 20W
+             ylim=plot.ROI[3:4],
+             expand=FALSE)+  
+    guides(fill=guide_colorsteps(order=1),
+           linetype=guide_legend(order=3))+
+    labs(x="",y="",linetype="Depth (m)",col="Suitable\nhabitat")  +
+    theme(panel.grid=element_blank())
 }
-
-grid.arrange(arrangeGrob(grobs=p.list, nrow = 1))
+SDM.plot(forecast.map)
 
 ```
 
-```{r Fig_Forecast_timeseries,fig.cap="**Figure 2. Time series of core spawning area characteristics.** *a) Area (km²) of core spawning area of blue whiting in the month of peak spawning (March). b) Westward extent (degrees of Longitude W) of core spawning area. Historical (blue triangles) and forecast (orange dot) values are shown.*"}
+```{r Fig_Forecast_timeseries,fig.cap="**Figure 2. Time series of spawning habitat characteristics for the northern blue whiting component .** *The time series of spawning habitat maps (e.g. Figure 1) is converted to an indicator of the relative expanded or contracted form of the habitat sizes and plotted. Historical values as show as bars relative to the 1960-2010 climatology (bars - colouring indicates values above or below the mean), while forecast value is shown as a red dot.*"}
 
-#Setup plot with forecast
-metrics.tidy <- metrics %>%
-  filter(core.percentiles==sel.core.percent) %>%
-  transform(ptile.westward=-ptile.westward) %>%
-  select("a) Area (km²)"=ptile.area,
-         "b) Westward extent (deg W)"=ptile.westward,
-         date,year,month) %>%
-  gather("metric","value",-date,-year,-month)
-hist.dat <- subset(metrics.tidy,month==spawn.month)
-hist.dat$type <- "Historical"
-forecast.dat <- subset(metrics.tidy,date==max(metrics.tidy$date))
-forecast.dat$type <- sprintf("%s Forecast",forecast.yr)
+#Import PCA database
+PCA.ts   <- 
+  readRDS(here("objects/PCA_full.rds")) %>%
+  filter(PC=="PC1",
+         spName==stat.sel["ts.spName"],
+         resultName==stat.sel["field"]) %>%
+  mutate(value=value*(-value[1]/abs(value[1])))  #Make first value (1950) always negative
+  
 
-#Make Figure 1 plot of time series
-ggplot(mapping=aes(date,value))+
-  geom_line(data = hist.dat,linetype=3)+
-  geom_point(data=hist.dat,size=3,aes(col=type,shape=type))+
-  geom_point(data=forecast.dat,size=3,aes(col=type,shape=type))+
-  facet_grid(metric~.,scales = "free_y")+
-  labs(x="Date",y="Value",col="Key",shape="Key")
+#Now prepare plot data
+hist.plot.dat <- 
+  PCA.ts %>%
+  filter(month==3)
+
+forecast.plot.dat <-
+  PCA.ts %>%
+  filter(date==max(date))%>%
+  mutate(year=forecast.yr)
+
+ylims <- range(pretty(c(-hist.plot.dat$value,hist.plot.dat$value)))
+
+ #Make Figure 1 plot of time series
+ggplot(mapping=aes(x=year,y=value))+
+  geom_bar(data=hist.plot.dat,
+           mapping=aes(fill=value>0),
+           stat="identity",show.legend = FALSE)+
+  geom_point(data=forecast.plot.dat,
+             size=3,col="red")+
+  scale_fill_manual(values=brewer.pal(3,"RdBu")[c(1,3)])+
+  geom_hline(yintercept = 0)+
+  scale_y_continuous(limits=ylims,
+                     breaks=ylims,
+                     labels=c("Contracted","Expanded"))+
+  labs(x="Year",y="Relative spawning habitat size",col="Key",shape="Key")
 ```
 
 ## How to Use this Forecast
 
-This forecast should be used as a broad-scale indicator of the expected spawning distribution of blue whiting in the upcoming spawning season. This forecast can be used in planning monitoring activities on this stock (e.g. the International Blue Whiting Spawning Stock Survey (IBWSSS)) and commercial fishing activities.
+This forecast should be used as a broad-scale indicator of the expected spawning habitat of blue whiting in the upcoming spawning season. This forecast can be used in planning monitoring activities on this stock (e.g. the International Blue Whiting Spawning Stock Survey (IBWSSS)) and commercial fishing activities.
 
 ## Background
 
-The spawning distribution of blue whiting has varied in the past and has expanded, contracted and shifted locations (Figures 2, 3). The dominant feature of these changes is a westward expansion away from the shelf-break region west of the European continental shelf onto the Rockall plateau and Hatton bank region (Figure 3).
+The spawning distribution of blue whiting can vary substantially from year to year (Figures 3). The dominant feature of these changes is a westward expansion away from the shelf-break region west of the European continental shelf onto the Rockall plateau and Hatton bank region.
 
 ![**Figure 3. Spatial distributions of blue whiting from the International Blue Whiting Spawning Stock Survey**. *Two years characterized by different oceanographic conditions (2007 and 2013) are shown. Note the large difference in range occupied towards the west in 2007 compared to 2013.*](resources/Expanded_contracted.png)
 
-Shifts in the spawning distribution of blue whiting have been linked to oceanographic conditions in this region (Hatun et al. 2009) and, in particular, to salinity (Miesner and Payne 2018). Spawning typically occurs within a narrow salinity window between approximately 35.3 and 35.5 (Figure 4). Salinity in this region is strongly driven, in turn, by the dynamics of the North Atlantic Sub-polar Gyre (Hatun et al. 2005). The slow dynamics of oceanographic properties can be used to provide reliable estimates of future distributions of water masses and thereby spawning habitat for blue whiting. 
+Shifts in the spawning distribution of blue whiting have been linked to oceanographic conditions in this region (Hatun et al. 2009) and, in particular, to salinity (Miesner and Payne 2018). Analysis of data from the Continuous Plankton Recorder spanning the period 1951-2005 using an ecological niche model (ENM)  has shown that larvae are primarily found within a narrow salinity window between approximately 35.3 and 35.5 (Figure 4). Retrospective predictions of habitat from the ENM (e.g. Figure 5) show good agreement with observations of adult distribution from scientific monitoring surveys (Figure 3).
+
+Salinity in this region is strongly driven by the dynamics of the North Atlantic Sub-polar Gyre (Hatun et al. 2005). This large body of relatively cool, fresher water has significant dynamics of its own, but they tend to vary slowly from year to year. Near-real time observations of these  oceanographic properties can be used as   reliable estimates of water mass locations in the near-future and thereby the spawning habitat for blue whiting.
 
 ![**Figure 4. Relationship between spawning and salinity from independent data sources**. *Presence frequency of spawning blue whiting (number of pixels with presences) a) observed in scientific surveys and b) caught in fisheries is compared to the mean salinity (250-600 m) at which these observations were made (bars). The blue line indicates the modelled smooth function of blue whiting larval-presence obtained from the Species Distribution Model (SDM) based on larval blue whiting catches by the CPR survey, with dashed lines indicating the standard error. Panel a) shows salinity observations from late March / early April, and Panel b)  shows data from March.*](resources/Salinity_relationship.png)
+
+
+
+```{r Fig_2007_13_maps,fig.cap="**Figure 5. Modelled spawning habitat for blue whiting in March 2007 and 2013.** *Habitat is based on a model of blue whiting larvae distributions and is converted into a metric of habitat quality, from low to high. The large differences in distribution observed in the IBWSS survey (Figure 3) are reflected here in the available habitat in each year. The 1000m and 2000m isobaths are added for reference.*"}
+#Extract selected SDMs
+these.SDMs <- 
+  sel.SDM %>%
+  filter(date!=max(date)) %>% #Drop the most recent
+  filter(resultName==stat.sel["field"],
+         spName=="global.ROI") %>%
+  mutate(dat=map(field,~as_tibble(rasterToPoints(.x)))) %>%
+  select(-field) %>%
+  unnest(dat) %>%
+  select(x,y,value="layer.26",type=date) %>%
+  mutate(type=year(ymd(type)))
+
+SDM.plot(these.SDMs)
+
+
+```
+
 
 ## Basis for Forecast 
 
 |Component | Description                                                 |
 -----------------|:-----------------------------------------------
-Biological model | Species distribution model (GAM) using salinity, latitude, day-of-year, solar elevation, and depth. Model is parameterised against observations of Blue Whiting larvae from the continuous plankton recorder (CPR) between 1951 and 2005.
-Environmental data set(s) | 1. EN v4.2.1: an optimal interpolation of oceanographic profiles onto a 1x1 degree, monthly grid from 1900-present (Good et al 2013) <br/> 2. PSY4 v3.1: a model-based reanalysis with assimilation of profile and satellite data, on a 1/12 x 1/12 degree grid, used here as monthly averages, from 2007-present. Copernicus CMEMS product id: GLOBAL_ANALYSIS_FORECAST_PHY_001_024_MONTHLY
+Biological model | Ecological niche model (GAM) using salinity, latitude, day-of-year, solar elevation, and depth. Model is parameterised against observations of Blue Whiting larvae from the Continuous Plankton Recorder (CPR) between 1951 and 2005.
+Environmental data set(s) | **EN v4.2.1** an optimal interpolation of oceanographic profiles onto a 1x1 degree, monthly grid from 1900-present (Good et al 2013) <br/> **CORIOLIS** An objective analysis generated  by the  Coriolis team in Brest,  France, providing  salinity fields based on insitu observations. CMEMS sevice id: `r toupper(paste(CMEMS.cfg$CORIOLIS.NRT@service.id,CMEMS.cfg$CORIOLIS.REP@service.id,sep=", "))` <br/> **Mercator** The Operational Mercator global ocean analysis and forecast system, using the PSY4 v3.1 model.  A model-based reanalysis with assimilation of profile and satellite data, on a 1/12 x 1/12 degree grid, used here as monthly averages, from 2018-present. Copernicus CMEMS service id: `r toupper(CMEMS.cfg$Mercator@service.id)`  <br/> **ARMOR3D** A model-based reanalysis provided by CLS (Toulouse, France) assimilating insitu and remote sensing observations on a 1/4 degree regular grid and on 33 depth levels, used here as monthly averages. Copernicus CMEMS service id: `r toupper(CMEMS.cfg$ARMOR3D.NRT@service.id)`  
 Environmental variables| Salinity averaged over 250-600m depth on a pixel-by-pixel basis
 Environmental forecast method |  Persistence from the most recent EN4 data product (`r most.recent.data`) 
 Forecast lead time | `r lead.time` (From  `r most.recent.data` to March `r forecast.yr`)
@@ -174,22 +228,84 @@ Table: **Table 1. Overview of the basis for the forecast.**
 
 This forecast is based on a species distribution model developed by Miesner and Payne (2018). The model uses observations of blue whiting larvae captured in the Continuous Plankton Recorder (CPR) as a response variable and links their presence to environmental covariates as explanatory variables, including salinity at spawning depth (250-600m), latitude, day of year, solar elevation angle and bathymetry. Salinity at spawning depth was shown to be the most important environmental factor that varied inter-annually, and drives the westward expansion of spawning habitat. The model has been verified by cross-validation with the CPR observations. Furthermore, the sensitivity of the larval response to salinity obtained from CPR data shows good agreement with independent distribution data sets obtained from both commercial fishers and scientific surveys (Figure 4). 
 
-Forecasts of the physical environment (and specifically salinity at spawning depth) are derived by assuming that the most recently observed state of the environment will persist until at least the next spawning period and possibly beyond. 
+Time-series of modelled habitats are generated based on the EN4 dataset from 1950 to the present day. These habitat maps are first cropped to cover the main spawning grounds of the "Northern" population of this species (Pointin and Payne 2013), as defined by the box with boundaries at 25W, 5W, 53N and 60N. The maps are then reduced to a time-series using Principle Components Analysis - the first princple component explains approximately 80% of the variance, while the associated Empirical Orthogonal Function reveals that this is strongly associated with an east-west mode of variability, and therefore the expansion or compression of the stock. Exploratory analyses have shown that this metric is strongly correlated with both the area of the spawning habitat and its westward extent. This first PC is used as the main indicator of the size of the habitat area (Figures 2,6).
+
+Forecasts of the physical environment (and specifically salinity at spawning depth) are derived by assuming that the most recently observed state of the environment (anomaly) will persist until at least the next spawning period and possibly beyond. 
+
 
 ## Quality Considerations
 
 This forecast is a prediction of the potential spawning habitat of the species and should not be interpreted as a direct forecast of distribution. While there is a relationship between the two, it is important to remember that the actual distribution of spawning may not utilise all of the potential spawning habitat (e.g. due to migration dynamics, density-dependent processes or other biotic factors). On the other hand, it is unlikely that spawning can occur in the absence of suitable habitat. The ability of this forecast to represent distribution is therefore asymmetrical.
 
-The forecast is based on observations of larvae, and therefore reflects the distribution of spawning activity. However, pre- and post-spawning fish are also migrating to and from the spawning grounds during this time, and although they are not reflected in this forecast, they may be observed in both scientific surveys and commercial fisheries. The forecast skill is therefore strongest in the east-west direction (perpendicular to the axis of migration) and weaker in the north-south direction. 
+The forecast is based on observations of larvae, and therefore reflects the distribution of spawning activity. However, pre- and post-spawning fish are also migrating to and from the spawning grounds during this time, and although they are not reflected in this forecast, they may be observed in both scientific surveys and commercial fisheries. The forecast skill is therefore strongest in the east-west direction (perpendicular to the axis of migration). 
 
 Forecasts of the physical environment in this region are currently based on persistence i.e. the assumption that, for example, next year will be the same as this year. While the dynamics in this region are typically slow, they have occasionally moved rapidly, which could cause discrepancies between forecasted and observed spawning habitat. However, such events are considered relatively rare and analysis of the forecast skill has shown that this is a valid assumption.
 
-
 ## Forecast Skill Assessment
 
-Forecast skill was assessed using historical data independent of those used in model development for different time lags. The skill based on persistence is significant for forecast lead-times up to 2-3 years (Figure 5). 
+Forecast skill was assessed using historical data independent of those used in model development for different time lags. The skill based on persistence is significant for forecast lead-times up to 2-3 years (Figure 6). For the short-term, the correlation coefficient is greater than 0.75.
+```{r Fig_skill,fig.cap="**Figure 6 Forecast skill assessment**. *Forecast skill is shown for metric of spawning habitat extent for the northern component of blue whiting in the waters west of the European continental shelf. The plots show correlation based on persistence of ocean dynamics for various lead times into the future. The dashed line indicates the minimum significant correlation (P > 0.05) for a one-tailed t-test (i.e. true correlation coefficient is greater than zero).*"}
 
-![**Figure 5. Forecast skill assessment**. *Forecast skill is shown for a) the  area (km²) and b) westward extent of potential spawning area for blue whiting in the waters west of the European continental shelf. The plots show correlation based on persistence of ocean dynamics for various lead times into the future. The dashed line indicates the minimum significant correlation (P > 0.05).*](resources/Skill.png)
+#Calculate metrics
+date.to.ym <- function(x) {
+  sprintf("%02i-%02i",year(x),month(x))
+}
+
+PCA.to.merge <- 
+  PCA.ts %>%
+  mutate(ym=date.to.ym(date)) %>%
+  dplyr::select(ym,value) 
+
+metric.grid <-
+  expand_grid(year=climatology.yrs,
+            lead=0:60) %>%
+  mutate(date=as.Date(ISOdate(year,03,15)),
+         start.date=date-months(lead),
+         ym=date.to.ym(date),
+         ym.start=date.to.ym(start.date)) %>%
+  left_join(y=PCA.to.merge,by="ym") %>%
+  left_join(y=PCA.to.merge,
+            by=c(ym.start="ym"),
+            suffix=c(".date",".start.date"))
+
+metrics <-
+  metric.grid %>%
+  group_by(lead) %>%
+  summarise(cor=cor(value.date,value.start.date),
+            n=n(),
+            .groups="drop") %>%
+  mutate(lead=lead/12) 
+
+#Calculate threshold cor following
+#https://en.wikipedia.org/wiki/Pearson_product-moment_correlation_coefficient
+#We use a one-tailed test at 5% CL
+#This can be done using either a Fisher transformation:
+#signif.cor <- tanh(qnorm(0.95)/sqrt(length(pcfg@clim.years)-3))
+#However, it's easy to do it exactly in R, so we prefer that instead
+cor.fn <- function(n) {
+  deg.freedom <- n -2
+  t.thresh <- qt(0.95,deg.freedom)
+  signif.thresh <- t.thresh / sqrt(deg.freedom+t.thresh^2)
+  return(signif.thresh)
+}
+
+#Plot
+ggplot()+
+  geom_hline(yintercept = 0)+
+  geom_hline(mapping=aes(linetype="Exceeds zero (95%)",yintercept=unique(cor.fn(metrics$n))))+
+  geom_line(data=metrics,mapping=aes(x=lead,y=cor,col="Pearson correlation"))+
+  labs(x="Forecast lead (years)",
+       y="Pearson correlation (r)",
+       colour="Statistic",
+       linetype="Significance test")+
+  scale_linetype_manual(values="dotted")+
+  guides(colour=guide_legend(order=1))+
+  coord_cartesian(expand = FALSE)+
+  expand_limits(y=c(-1,1))+
+  scale_x_continuous(breaks=0:10)
+
+```
+
 
 ## For More Information
 
@@ -209,9 +325,13 @@ Hátún H., Payne, M.R., and Jacobsen, J.A. (2009) The North Atlantic subpolar g
 
 Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawning distribution of blue whiting (*Micromesistius poutassou*). Fisheries Oceanography, 27(6), 623–638. doi:10.1111/fog.12382
 
+Pointin, Fabien; Payne, Mark R (2014): A Resolution to the Blue Whiting (Micromesistius poutassou) Population Paradox? PLoS ONE, 9(9), e106237, https://doi.org/10.1371/journal.pone.0106237
+
+
 ## Change Log
 
-* 20200131 Updated to 2020 forecast.
+* 2021018 - Shift to use of PredEng pipeline to generate model predictions. Use of PCA to synthesise ENM maps. Addition of more oceanographic data sets and "consensus" visualisation.
+* 2020 - No forecast was issued in 2020 due to practical limitations associated with the global COVID-19 pandemic.
 * 20190103 Updated. Forecast verification for 2018 included.
 * 20180831 Updated to 2019 forecast.
 * 20180301.v03.0 Updated EN4 data set to 4.2.1. Added forecast expressed as an anomaly. Added "forecast basis" summary table. Added supplementary information comparing with survey track and current oceanographic state. Add PSY4 reanalysis product into mix.
@@ -221,170 +341,176 @@ Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawn
 
 ## Supplementary Information
 
-### S1. 2018 Forecast Verification
-A further indication of the performance of the forecast system can be gained by comparing the forecasts issued previously with the actual observations. We have compared the forecast issued in January 2018 with the corresponding distribution observed in the International Blue Whiting Spawning Stock (IBWSS) survey performed in March 2018 (Figure S1.1).  
+<!-- ### S1. 2018 Forecast Verification -->
+<!-- A further indication of the performance of the forecast system can be gained by comparing the forecasts issued previously with the actual observations. We have compared the forecast issued in January 2018 with the corresponding distribution observed in the International Blue Whiting Spawning Stock (IBWSS) survey performed in March 2018 (Figure S1.1).   -->
 
 
-```{r Performance,fig.cap="**Figure S1.1. 2018 forecast verification** *Comparison of forecast habitat and observed distribution for the 2018 spawning season. The forecast spawning habitat is reproduced from the January 2018 WGS2D forecast (Forecast sheet 001-v02.1) and is represented as coloured areas, corresponding to the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder. Acoustic density (sA values) observed in 2018 IBWSS survey are plotted as circles whose area is proportional to the sA value – crosses indicate absence of blue whiting. The 1000m and 2000m isobaths are added for reference.*"}
-#Setup forecast data
-fname.forecast <- "pred.EN.4.2.0.p.analysis.g10.201710.salinity.nc"
-forecast.r <- raster(file.path("forecast_sheet","resources",fname.forecast))
-forecast.r.df <- rasterToPoints(forecast.r) %>% as.tibble() %>% mutate(type="January 2018 Forecast")
-forecast.r.df$val.rounded <- discretise(forecast.r.df$layer,seq(0,0.5,by=0.1),"%0.1f",c(FALSE,TRUE))
+<!-- ```{r Performance,fig.cap="**Figure S1.1. 2018 forecast verification** *Comparison of forecast habitat and observed distribution for the 2018 spawning season. The forecast spawning habitat is reproduced from the January 2018 WGS2D forecast (Forecast sheet 001-v02.1) and is represented as coloured areas, corresponding to the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder. Acoustic density (sA values) observed in 2018 IBWSS survey are plotted as circles whose area is proportional to the sA value – crosses indicate absence of blue whiting. The 1000m and 2000m isobaths are added for reference.*"} -->
+<!-- # #Setup forecast data -->
+<!-- # fname.forecast <- "pred.EN.4.2.0.p.analysis.g10.201710.salinity.nc" -->
+<!-- # forecast.r <- raster(file.path("forecast_sheet","resources",fname.forecast)) -->
+<!-- # forecast.r.df <- rasterToPoints(forecast.r) %>% as.tibble() %>% mutate(type="January 2018 Forecast") -->
+<!-- # forecast.r.df$val.rounded <- discretise(forecast.r.df$layer,seq(0,0.5,by=0.1),"%0.1f",c(FALSE,TRUE)) -->
+<!-- #  -->
+<!-- # #Import 2018 survey results -->
+<!-- # surv.dat <- read_csv2("forecast_sheet/resources/IBWSS_WHB_SA_distribution_ICES1x2_year_2018.csv") -->
+<!-- # stop_for_problems(surv.dat) -->
+<!-- # surv.dat <- rename(surv.dat,sA=`SA weighted by nmlog`) %>% -->
+<!-- #             mutate(bin=cut(sA, -->
+<!-- #                            breaks=c(-Inf,0,1000,2000,Inf), -->
+<!-- #                            labels=c("Absent","Low","Medium","High"))) -->
+<!-- #  -->
+<!-- # #Do plot -->
+<!-- # #bath.df <- rasterToPoints(-1*bath) %>% as.tibble() -->
+<!-- #  -->
+<!-- #  -->
+<!-- # ggplot(forecast.r.df,aes(x,y))+ -->
+<!-- #   geom_raster(aes(fill=val.rounded))+ -->
+<!-- #  # geom_contour(data=bath.df,aes(z=z,linetype=factor(..level..)), -->
+<!-- #   #             breaks=c(1000,2000),col="grey50")+ -->
+<!-- #   #geom_point(data=surv.dat,aes(x=LON,y=LAT,shape=bin,size=bin))+ -->
+<!-- #   geom_point(data=surv.dat,aes(x=LON,y=LAT,size=sA),shape=16)+ -->
+<!-- #   geom_point(data=filter(surv.dat,sA==0),aes(x=LON,y=LAT,size=100),shape=4,show.legend = FALSE)+ -->
+<!-- #   annotation_map(map_data("world"),#xlim=map.xlims,ylim=map.ylims, -->
+<!-- #                  fill="black",col="black")+ -->
+<!-- #   scale_fill_brewer(palette="YlOrRd",direction = 1)+ -->
+<!-- #   scale_shape_manual(values=c(4,16))+ -->
+<!-- #   #scale_size_manual(values=c(1/3,1,1,1.5)*4)+ -->
+<!-- #   scale_size_area()+ -->
+<!-- #   theme(legend.position="left")+ -->
+<!-- #   guides(linetype=guide_legend(order=99), -->
+<!-- #          shape=guide_legend(order=98,override.aes = list(shape=c(4,4,16))), -->
+<!-- #          size=NULL,#guide_legend(order=98), -->
+<!-- #          fill=guide_legend(order=1))+ -->
+<!-- #   coord_quickmap(expand=FALSE)+ -->
+<!-- #   labs(x="",y="",linetype="Depth (m)",fill="Jan'18 Forecast", -->
+<!-- #        size="Mar'18 Survey",shape="Mar'18 Survey") -->
 
-#Import 2018 survey results
-surv.dat <- read_csv2("forecast_sheet/resources/IBWSS_WHB_SA_distribution_ICES1x2_year_2018.csv")
-stop_for_problems(surv.dat)
-surv.dat <- rename(surv.dat,sA=`SA weighted by nmlog`) %>%
-            mutate(bin=cut(sA,
-                           breaks=c(-Inf,0,1000,2000,Inf),
-                           labels=c("Absent","Low","Medium","High")))
+<!-- # #x-y Comparison. Start by extracting values, then plot -->
+<!-- # sA.lod <- min(surv.dat$`SA weighted by nmlog`[surv.dat$`SA weighted by nmlog`!=0])/2 -->
+<!-- # surv.dat <- mutate(surv.dat, -->
+<!-- #                    forecast= raster::extract(forecast.r,surv.dat[,c("LON","LAT")],method="bilinear"), -->
+<!-- #                    SA.filter=ifelse(`SA weighted by nmlog`==0,sA.lod,`SA weighted by nmlog`)) -->
+<!-- # ggplot(surv.dat,aes(forecast,SA.filter))+ -->
+<!-- #   geom_point()+ -->
+<!-- #   stat_smooth(method="rlm") -->
+<!-- # + -->
+<!-- #   scale_x_log10()+scale_y_log10() -->
 
-#Do plot
-bath.df <- rasterToPoints(-1*bath) %>% as.tibble()
-
-
-ggplot(forecast.r.df,aes(x,y))+
-  geom_raster(aes(fill=val.rounded))+
-  geom_contour(data=bath.df,aes(z=z,linetype=factor(..level..)),
-               breaks=c(1000,2000),col="grey50")+
-  #geom_point(data=surv.dat,aes(x=LON,y=LAT,shape=bin,size=bin))+
-  geom_point(data=surv.dat,aes(x=LON,y=LAT,size=sA),shape=16)+
-  geom_point(data=filter(surv.dat,sA==0),aes(x=LON,y=LAT,size=100),shape=4,show.legend = FALSE)+
-  annotation_map(map_data("world"),#xlim=map.xlims,ylim=map.ylims,
-                 fill="black",col="black")+
-  scale_fill_brewer(palette="YlOrRd",direction = 1)+
-  scale_shape_manual(values=c(4,16))+
-  #scale_size_manual(values=c(1/3,1,1,1.5)*4)+
-  scale_size_area()+
-  theme(legend.position="left")+
-  guides(linetype=guide_legend(order=99),
-         shape=guide_legend(order=98,override.aes = list(shape=c(4,4,16))),
-         size=NULL,#guide_legend(order=98),
-         fill=guide_legend(order=1))+
-  coord_quickmap(xlim=map.xlims,ylim=map.ylims,expand=FALSE)+
-  labs(x="",y="",linetype="Depth (m)",fill="Jan'18 Forecast",
-       size="Mar'18 Survey",shape="Mar'18 Survey")
-
-# #x-y Comparison. Start by extracting values, then plot
-# sA.lod <- min(surv.dat$`SA weighted by nmlog`[surv.dat$`SA weighted by nmlog`!=0])/2
-# surv.dat <- mutate(surv.dat,
-#                    forecast= raster::extract(forecast.r,surv.dat[,c("LON","LAT")],method="bilinear"),
-#                    SA.filter=ifelse(`SA weighted by nmlog`==0,sA.lod,`SA weighted by nmlog`))
-# ggplot(surv.dat,aes(forecast,SA.filter))+
-#   geom_point()+
-#   stat_smooth(method="rlm")
-# +
-#   scale_x_log10()+scale_y_log10()
-
-
-```
-
-As can be see, there is good qualitative agreement between the habitat forecast with two months leadtime, and the observed distribution. As expected, the agreement is strongest in the east-west direction, and the forecast particularly reproduces the confinement of the spawning stock to the rockall trough region. Observations of fish in the Faroe-Scotland channel and around Shetland are most likely pre- or post-spawning fish migrating to or from the spawning grounds.
-
-### S2. Oceanographic Conditions
-
-To provide a more detailed insight into the current oceanographic conditions driving the distribution, the current state of salinity at the spawning depth is shown below, as of `r most.recent.data`. In particular, the well-reported salinity anomalies in the North Atlantic Sub-Polar Gyre (upper-left side of panel b) are having a clear effect on the spawning region of blue whiting and compressing the spawning habitat.
-
-```{r Oceanography_map,fig.cap="**Figure S2.1 Observed salinity distribution and associated anomaly in the spawning region.** *Salinity is based on the EN4 observational dataset for November 2018 at spawning depth (250-600m) and is plotted as a) the absolute value and b) the deviation from the annual climatology (1960-2010). The isohalines defining the suitable salinity window (35.3 - 35.5) at spawning depth for Blue Whiting are marked with a blue contour line in panel a). The 1000m and 2000m isobaths are added for reference.*"}
-#Map and time series of salinity
-
-#Setup salinity data and mask
-sal.b.all <- raster(snapshot.src)
-sal.b <- mask(sal.b.all,bath.poly)
-
-#Import and setup climatology
-load("objects/Oceanographic_climatology.RData")
-sal.anom.all <- sal.b.all - data.clim
-sal.anom <- mask(sal.anom.all,bath.poly)
-
-#Extract data
-sal.df <- raster2df(sal.b,type="a) Salinity")
-sal.df <- subset(sal.df,!is.na(value))
-sal.df$val.bin <- discretise(sal.df$value,seq(35,36,by=0.1),"%2.1f")
-anom.df <- raster2df(sal.anom,type="b) Anomaly")
-anom.df <- subset(anom.df,!is.na(value))
-anom.df$val.bin <- discretise(anom.df$value,seq(-0.08,0.08,by=0.02),"%0.2f")
-
-#Do plot
-map.xlims <- extent(sal.b)[1:2]
-map.ylims <- extent(sal.b)[3:4]
-
-g.list <- list()
-g.list$sal <- ggplot(mapping=aes(x,y))+
-  geom_raster(data=sal.df,aes(fill=val.bin))+
-  geom_contour(data=sal.df,aes(z=value),
-               breaks=sal.isohalines,size=1,col="blue")+
-  scale_fill_brewer(palette="YlOrRd",direction = 1,drop=TRUE)+
-  labs(fill="Salinity")+
-  theme(legend.position="left")
-
-g.list$anom <- ggplot(mapping=aes(x,y))+
-  geom_raster(data=anom.df,aes(fill=val.bin))+
-  scale_fill_brewer(palette="RdBu",direction = -1,drop=FALSE)+
-  labs(fill="Anom.")
-for(n in names(g.list)) {
-  g.list[[n]] <- g.list[[n]] +
-    coord_quickmap(xlim=map.xlims,ylim=map.ylims,expand=FALSE)+
-    geom_contour(data=bath.df,aes(z=z,linetype=factor(..level..)),
-                 breaks=c(1000,2000),col="black")+
-    borders(xlim=map.xlims,ylim=map.ylims,
-            fill="black",col="black")+
-    facet_wrap(~type)+
-    labs(x="",y="",linetype="Depth (m)")+
-    theme(panel.background = element_rect(fill="grey90"),
-          panel.grid=element_blank())
-  
-}
-
-grid.arrange(arrangeGrob(grobs=g.list, nrow = 1))
-
-```
-
-```{r Oceanography_timeseries,fig.cap="**Figure S2.2. Time series of salinity in the spawning area.** *Monthly salinity at spawning depth (250-600m) from the EN4 and PSY4 datasets are plotted as a function of time - note the change in timescale at 2000, to give greater resolution of the most recent years.*"}
-load("objects/ocean_data.RData")
-ocean.dat.df$panel <- year(ocean.dat.df$date)>=2000
-
-ggplot(ocean.dat.df,aes(date,salinity,colour=source))+geom_line()+
-  labs(x="Date",y="Salinity",colour="Model")+
-  facet_wrap(~panel,scale="free_x")+
-  scale_x_date(expand=c(0,0))+
-  geom_blank(data=data.frame(date=as.Date("2020-01-01"),salinity=mean(ocean.dat.df$salinity),panel=TRUE,source="EN4"))+
-  theme(strip.background = element_blank(),
-        strip.text.x = element_blank(),
-        panel.spacing.x = unit(0,"mm"))
-
-```
-
-
-<!-- ### S2. Comparison with proposed survey track -->
-<!-- To allow a more direct comparison between the proposed survey track and the modelled distribution of blue whiting, we have overlaid the survey track on top of Figure 1 below. -->
-
-<!-- ```{r Survey_track,fig.cap="**Figure S2.1. Comparison of survey track and forecast distribution** *Forecast spawning distribution (see Figure 1 above) represented here as the probability of observing blue whiting larvae in a single haul performed by the Continuous Plankton Recorder  is plotted as the grey background distribution. The proposed survey tracks, broken down by country, are overlayed as coloured lines. The 1000m and 2000m isobaths are added for reference.*"} -->
-<!-- #Import data -->
-<!-- surv.track <- read.csv2("data/plan_country_2018.csv") -->
-
-<!-- #Make plot -->
-<!-- ggplot(forecast.r.df,aes(x,y))+ -->
-<!--   geom_raster(aes(fill=val.rounded))+ -->
-<!--   coord_quickmap(xlim=map.xlims,ylim=map.ylims,expand=FALSE)+ -->
-<!--   geom_contour(data=bath.df,aes(z=value,linetype=factor(..level..)), -->
-<!--                breaks=c(1000,2000),col="black")+ -->
-<!--   geom_path(data=surv.track,aes(x=lon,y=lat,colour=Country),size=1)+ -->
-<!--   borders("world",xlim=map.xlims,ylim=map.ylims, -->
-<!--          fill="black",col="black")+ -->
-<!--   scale_fill_brewer(palette="Greys",direction = 1)+ -->
-<!--   scale_color_manual(values=c(2:4,6))+ -->
-<!--   scale_linetype(guide=FALSE)+ -->
-<!--   labs(x="",y="",fill="Probability",linetype="Depth (m)") -->
 
 <!-- ``` -->
+
+<!-- As can be see, there is good qualitative agreement between the habitat forecast with two months leadtime, and the observed distribution. As expected, the agreement is strongest in the east-west direction, and the forecast particularly reproduces the confinement of the spawning stock to the rockall trough region. Observations of fish in the Faroe-Scotland channel and around Shetland are most likely pre- or post-spawning fish migrating to or from the spawning grounds. -->
+
+### S1. Oceanographic Conditions
+
+To provide a more detailed insight into the current oceanographic conditions driving the distribution, the current state of salinity at the spawning depth is shown below. In particular, the well-reported salinity anomalies in the North Atlantic Sub-Polar Gyre (upper-left side of panel b) are having a clear effect on the spawning region of blue whiting and compressing the spawning habitat.
+
+```{r Oceanography_map,fig.cap="**Figure S2.1 Comparison of alternative salinity datasets.** *The most recent salinity estimates at spawning depth (250-600m) from two observationally-based analysis products (EN4, CORIOLIS) and two model-based ocean reanalyses (ARMORD3D, Mercator) are plotted. The while isohalines define the suitable salinity window (35.3 - 35.5). The 1000m and 2000m isobaths are added for reference. Panels are labelled with the name of the data product and the date of the most recent estimate. All datasources are interpolated onto a common 0.25 degree grid.*"}
+
+sal.isohalines <- c(35.3,35.5)  #psu
+
+#Combine and setup data for plotting
+snapshots <- 
+  readRDS(here("objects/Salinity_snapshots.rds")) %>%
+  ungroup() %>%
+  mutate(data=map(field,rasterToPoints),
+         data=map(data,as_tibble),
+         data=map(data,set_colnames,c("x","y","value")),
+         title=sprintf("%s\n(%s)",model,date),
+         title=factor(title,title[c(4,2,3,1)])) %>%
+  unnest(data) %>%
+  filter(!is.na(value)) %>%
+  mutate(sal.ok=value > min(sal.isohalines) & value < max(sal.isohalines))
+
+#Do plot
+ggplot(snapshots)+
+  facet_wrap(~title,nrow=1)+
+  geom_raster(aes(x,y,fill=value))+
+  annotation_map(map_data("world"),fill="black")+
+  geom_sf(data=bath.poly,mapping=aes(linetype=level,size=level),col="black",show.legend = FALSE)+
+  geom_contour(aes(x,y,z=value),
+                breaks=sal.isohalines,
+               size=1,col="white")+
+  coord_sf(xlim=plot.ROI[1:2],ylim=plot.ROI[3:4],expand=FALSE)+  
+  scale_fill_viridis_b(direction=-1,
+                       breaks=c(35.1,35.3,35.5,35.7),
+                       labels=function(x) {sprintf("%0.2f",x)})+
+  scale_linetype_manual(values=c(1,1))+
+  scale_size_manual(values=c(0.25,0.5))+
+  labs(fill="Salinity",x="",y="")+
+  guides(fill=guide_bins(reverse=FALSE,
+                         label.theme = element_text(angle=90,size=10,hjust=1),
+                         axis.arrow =arrow(length = unit(.1, "inches"), 
+                                           ends = "both", 
+                                           type = "closed" )))+
+  theme(panel.background = element_rect(fill="grey80"),
+        panel.grid=element_blank(),
+        legend.position=  "bottom",
+        axis.ticks = element_blank(),
+        axis.text = element_blank())
+
+```
+
+```{r Oceanography_consensus,fig.cap="**Figure S2.2 Data source consensus** *The number of datasets in a pixel where the most recent salinity estimate is within the suitable salinity window (35.3 - 35.5) is plotted. The 1000m and 2000m isobaths are added for reference.*"}
+
+#Consensus habitat
+consensus.fields <-
+  snapshots %>%
+  mutate(habitat=value>min(sal.isohalines) & value < max(sal.isohalines)) %>%
+  group_by(x,y) %>%
+  summarise(n.models=sum(habitat)) %>%
+  ungroup()
+
+
+ggplot()+
+  geom_raster(data=consensus.fields,mapping=aes(x,y,fill=n.models))+
+  annotation_map(map_data("world"),fill="black")+
+  geom_sf(data=bath.poly,mapping=aes(linetype=level,size=level),
+          col="black",show.legend = FALSE)+
+  # geom_contour(data=snapshots,
+  #              mapping=aes(x,y,z=value,colour=model),
+  #              breaks=sal.isohalines,size=0.75)+
+  coord_sf(xlim=plot.ROI[1:2],ylim=plot.ROI[3:4],expand=FALSE)+  
+  scale_fill_distiller(palette="Oranges",direction = 1)+
+  scale_linetype_manual(values=c(1,1))+
+  scale_size_manual(values=c(0.5,0.25))+
+  guides(fill=guide_legend(reverse=TRUE))+
+  labs(fill="Number of\ndatasets")+
+  labs(x="",y="")+
+  theme(panel.background = element_rect(fill="grey90"),
+        panel.grid=element_blank())
+
+```
+
+
+```{r Oceanography_timeseries,fig.cap="**Figure S2.3. Time series of salinity in the spawning area.** *Monthly salinity at spawning depth (250-600m) from two observationally-based analysis products (EN4, CORIOLIS) and two model-based ocean reanalyses (ARMORD3D, Mercator). Points are plotted for each individual month, while a line smooths each individual data source and corrects for any seasonal cycle. The most recent estimate for each source is plotted as a point with 95% confidence interval (after correcting for the seasonal cycle).*"}
+
+#Load time series of salinity
+ocean.ts <- 
+  readRDS(file=here("objects/Smoothed_oceanography.rds")) 
+  
+most.recent.ts.dat <- 
+  ocean.ts %>%
+  group_by(model) %>%
+  filter(date==max(date))
+
+ocean.ts %>% 
+  ggplot(aes(x=date,group=model))+
+  geom_point(mapping=aes(y=salinity,colour=model),alpha=0.25)+
+  geom_line(mapping=aes(y=fit,colour=model),size=1) + 
+  geom_point(mapping=aes(y=fit,colour=model),data=most.recent.ts.dat,size=2)+
+  geom_errorbar(mapping=aes(y=fit,ymin=lbnd,ymax=ubnd,colour=model),data=most.recent.ts.dat,size=1,width=500)+
+  labs(colour="Source",x="Year",y="Mean Salinity (psu)")
+
+```
+
 
 ## License Information
 
 This work by Mark R. Payne is licensed under a  Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License. For details, see http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US. Basically, this means that you are free to "share" and "remix" for non-commercial purposes as you see fit, so long as you "attribute" me for my contribution. Derivatives can be distributed under the same or similar license.
 
-This work comes with ABSOLUTELY NO WARRANTY or support.
+This work is an experimental research forecast product and comes with ABSOLUTELY NO WARRANTY or support. Any use of these forecasts is done at the risk of the user.
 
 ![](../../common/blue-action-logo.png)
 

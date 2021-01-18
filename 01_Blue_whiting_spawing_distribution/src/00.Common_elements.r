@@ -60,16 +60,18 @@ climatology.yrs <- 1960:2010
 spawn.month <- 3  #Peak spawning in march, even though we observe peak larvae
                   #later in April.
 spawn.depth <- c(250,600)
-ts.ROI <- extent(-20,-5,50,60)  #Focus on spawning region. Note that this needs to be matched
-                                #with analysis from PredEng
+ts.ROI <-      extent(-25,-5,53,60)  #Focus on spawning region. Note that this needs to be matched
+                                     #with analysis from PredEng
+extract.ROI <- extent(-25,0,40,65)   #Should also be matched with PredEng
+plot.ROI <-    extent(-25,0,45,65)   #Used for plotting
 
 #Directories
 EN4.data.dir <- "data/EN4"
 PSY4.data.dir <- "data/PSY4V3R1/database"
 pred.dir <- file.path("outputs","predictions")
 
-#Resolution of predicted distribution
-pred.res <- c(0.25,0.25)
+#Resolution of oceanographic data
+grid.res <- c(0.25,0.25)
 
 # -----------
 # This work by Mark R Payne is licensed under a  Creative Commons

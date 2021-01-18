@@ -47,63 +47,74 @@ predEng.db <- here("data/PredEng/Blue_whiting_WGS2D.sqlite")  #Directory contain
 #==========================================================================
 #Get and filter list of statistics
 this.db <- dbConnect(RSQLite::SQLite(), predEng.db)
-stats.tbl <- 
-  tbl(this.db,"statistics") 
 
+#'========================================================================
+# Time series values ####
+#'========================================================================
+#Setup scalar table
 obs.stats <- 
-  stats.tbl %>%
-  filter(srcType =="Observations")
+  tbl(this.db,"statistics") %>%
+  filter(srcType =="Observations") %>%
+  select(-field,-calibrationMethod,-realization,-startDate,-leadIdx)
 
-#'========================================================================
-# Field predictions ####
-#'========================================================================
-deblob <- function(x) {
-  x %>%
-    mutate(field=map(field,unserialize))
-}
-
+#SDM results
 SDM.res <-
   obs.stats %>%
-  filter(statName=="SDM15Apr") %>%
-  collect() %>%
-  deblob()
+  filter(statName=="SDM",
+         !is.na(value)) %>%
+  collect() 
+saveRDS(SDM.res,file="objects/PredEng_SDM.rds")
 
 EN4.res <-
   obs.stats %>%
   filter(srcName=="EN4",
          statName=="Mean-salinity") %>%
   collect() 
+saveRDS(EN4.res,file="objects/PredEng_EN4_mean_salinity.rds")
 
-#Calculate the climatology field
-SDM.clim.df <-
-  SDM.res %>%
-  filter(srcType=="Observations",
-         year(date) %in% climatology.yrs)
-
-SDM.clim <-
-  brick(SDM.clim.df$field) %>%
-  mean()
-
-
-#Save results
-saveRDS(SDM.res,file="objects/PredEng_SDM.rds")
-saveRDS(EN4.res,file="objects/EN4_mean_salinity.rds")
-
-saveRDS(SDM.clim,file="objects/SDM_climatology.rds")
 
 #'========================================================================
-# Extracted salinity field  ####
+# Most recent fields  ####
 #'========================================================================
+# Get mr date first
+mr.date <- as.character(max(ymd(EN4.res$date)))
+
+deblob <- function(x) {
+  x %>%
+    mutate(field=map(field,unserialize))
+}
+
 #Most recent EN4 salinity
 mr.EN4 <- 
-  tbl(this.db,"calibration") %>%
+  tbl(this.db,"extraction") %>%
   filter(srcType=="Observations",
-         srcName=="EN4") %>%
+         srcName=="EN4",
+         date==mr.date) %>%
   collect() %>%
-  filter(date==max(date)) %>%
-  mutate(field=map(data,unserialize))
+  deblob()
+saveRDS(mr.EN4,file="objects/PredEng_MR_EN4_salinity_field.rds")
 
-saveRDS(mr.EN4,file="objects/EN4_salinity_field.rds")
+#Selected SDM fields
+sel.SDM <-
+  tbl(this.db,"statistics") %>%
+  filter(srcType =="Observations",
+         statName =="SDM",
+         date %in% c(mr.date,"2007-03-16","2013-03-16"),
+         is.na(value)) %>%
+  collect() %>%
+  deblob() %>%
+  select(-calibrationMethod,-realization,-startDate,-leadIdx)
+saveRDS(sel.SDM,file="objects/PredEng_Sel_SDM_fields.rds")  
+
+#'========================================================================
+# Persistence metrics ####
+#'========================================================================
+metrics <- 
+  tbl(this.db,"metrics") %>%
+  filter(srcType =="Persistence") %>%
+  collect()
+saveRDS(metrics,file="objects/PredEng_metrics.rds")
+
 
 #==========================================================================
 # Complete

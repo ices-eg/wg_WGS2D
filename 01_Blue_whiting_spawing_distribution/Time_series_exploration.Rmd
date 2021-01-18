@@ -1,0 +1,230 @@
+---
+title: "Exploration of time series"
+output:
+  html_document: 
+    df_print: paged
+    keep_md: no
+---
+
+```{r setup, include="FALSE"}
+#'========================================================================
+# Time_series_exploration
+#'========================================================================
+#
+# by Mark R Payne
+# DTU-Aqua, Kgs. Lyngby, Denmark
+# http://www.staff.dtu.dk/mpay
+#
+# Created Fri Jan 15 20:19:08 2021
+#
+# <Description>
+#
+# This work is subject to a Creative Commons "Attribution" "ShareALike" License.
+# You are largely free to do what you like with it, so long as you "attribute"
+# me for my contribution. See the fine print at the end for exact details.
+#
+# To do:
+#
+# Notes:
+#   * Knitting of notebooks from Rstudio leads to all sorts of messy problems 
+#     with the directory. Use here::here() to specify a location relative to
+#     the project top directory
+#
+#'========================================================================
+
+#Configure Knitr
+knitr::opts_chunk$set(
+  echo=FALSE,
+	error = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	include = TRUE,
+	results = "markup",
+	fig.width = 10,
+	fig.height=14/25*10,
+  fig.align="center",
+  fig.path=here::here("notebooks","figures","Time_series_exploration_"))
+
+#Powerpoint needs 14 x 25cm figures
+
+# knitr::opts_knit$set(
+#    root.dir="..")
+
+library(tidyverse)
+library(lubridate)
+library(here)
+library(RSQLite)
+source(here("src/00.Common_elements.r"))
+
+theme_set(theme_bw(base_size = 14))
+```
+
+```{r}
+#==========================================================================
+# Configure ####
+#==========================================================================
+
+```
+
+by Mark R Payne  <br>
+DTU-Aqua, Kgs. Lyngby, Denmark  <br>
+http://www.staff.dtu.dk/mpay  <br>
+`r format(Sys.time(), "%a %b %d %Y, %H:%M:%S ")`
+
+This notebook compares the outputs from the PredEng pipeline, in particularly to check for
+similarities and differences between the different metrics that have been generated there.
+
+```{r results="asis"}
+#'========================================================================
+# PCA analysis ####
+#'========================================================================
+#Import PCA databbase
+PCA.clim <- readRDS(here("objects/PCA_clim.rds"))
+PCA.ts   <- 
+  readRDS(here("objects/PCA_full.rds")) %>%
+  filter(PC=="PC1") %>%
+  unite("resultName",PC,resultName) 
+
+#Extract PCA metrics
+PCA.import <- 
+  PCA.clim %>%
+  mutate(importance=map(PCA,~summary(.x)$importance[3,] %>% enframe(name="PC")))  %>%
+  dplyr::select(-PCA,-raster) %>%
+  unnest(importance) %>%
+  mutate(PC=as.numeric(gsub("PC","",PC)))
+
+PCA.loadings <-
+  PCA.clim %>%
+  mutate(loadings=map(PCA,~ summary(.x)$rotation[,1:3]),
+         raster=map(raster,rasterToPoints),
+         loadings.dat=map2(raster,loadings,~bind_cols(as_tibble(.x),as_tibble(.y)))) %>%
+  dplyr::select(spName,resultName,loadings.dat) %>%
+  unnest(loadings.dat) %>%
+  dplyr::select(spName,resultName,x,y,PC1,PC2) %>%
+  pivot_longer(starts_with("PC"),names_to = "PC",values_to = "loadings")
+
+#'========================================================================
+# Setup ####
+#'========================================================================
+#Import data
+this.db <- dbConnect(SQLite(),here("data/PredEng/Blue_whiting_WGS2D_results.sqlite"))
+stats <- 
+  this.db %>%
+  tbl("statistics") %>%
+  collect() %>%
+  filter(is.na(field),
+         statName=="SDM") %>%
+  #Merge in PCAs
+  mutate(date=ymd(date)) %>%
+  bind_rows(PCA.ts)%>%
+  mutate(stat.type=str_sub(resultName,1,4))
+
+#Calculate z scores
+stats <-
+  stats %>%
+  group_by(resultName,spName) %>%
+  mutate(value=scale(value)) %>%
+  ungroup() 
+  
+
+#Get items to loop over
+spNames <- 
+  stats %>% 
+  distinct(spName) %>%
+  pull()
+
+
+#Now loop
+for(this.spName in spNames) {
+  cat(sprintf("\n\n## %s \n \n",this.spName))
+  
+  #Plot PCA characteristics first
+  p <- PCA.import %>%
+    filter(spName == this.spName) %>%
+    ggplot(aes(PC,value,colour=resultName,type=resultName)) +
+    geom_point()+
+    geom_line()+
+    coord_cartesian(xlim=c(0,10)) 
+  plot(p)
+  
+  
+  p <- 
+    PCA.loadings %>%
+    filter(spName == this.spName) %>%
+    ggplot(aes(x,y,fill=loadings))+
+    annotation_map(map_data("world"),fill="black")+
+    geom_raster()+
+    facet_grid(PC ~resultName )+
+    scale_fill_distiller(type="div")+
+    coord_quickmap()+
+    theme(panel.background = element_rect(fill = "grey80"),
+          panel.grid = element_blank())
+  
+  plot(p)
+  
+  #PCA time series plot
+  # PCA.ts %>%
+  #   filter(spName==this.spName,
+  #          year %in% climatology.yrs,
+  #          month ==3,
+  #          stat.type %in% c("PC1","PC2")) %>%
+  #   mutate(lbl=sprintf("%02i",year %%100)) %>%
+  #   pivot_wider(names_from=stat.type,values_from = value) %>%
+  #   ggplot(aes(PC1,PC2,label=lbl))+
+  #   geom_text()+
+  #   facet_wrap(~resultName)
+
+  #Time series plot
+  p <- 
+    stats %>%
+    filter(spName == this.spName) %>%
+    ggplot(aes(x=date,y=value,colour=resultName))+
+    geom_line()+
+    facet_wrap(~stat.type,ncol=1) 
+  plot(p)
+  
+  #Correlation plot
+  cor.dat <- 
+    stats %>%
+    filter(spName == this.spName) %>%
+    dplyr::select(date,resultName,value) %>%
+    pivot_wider(names_from=resultName,values_from = value) %>%
+    dplyr::select(-date) %>%
+    cor(use="pairwise.complete") %>%
+    as_tibble(rownames="x") %>%
+    pivot_longer(-x,names_to="y",values_to = "cor") %>%
+    mutate(lbl=sprintf("%0.2f",round(cor,2))) %>%
+    filter(x!=y)
+  
+  p <- 
+    ggplot(cor.dat,aes(x,y))+
+    geom_tile(aes(fill=cor))+
+    geom_text(aes(label=lbl))+
+    scale_fill_distiller(type="div",limits=c(-1,1))+
+    theme(axis.text.x = element_text(angle=90,hjust=1))+
+    labs(x="",y="") 
+  plot(p)
+  
+}
+
+```
+
+
+
+
+
+***
+*This work by Mark R Payne is licensed under a  Creative Commons
+Attribution-NonCommercial-ShareAlike 3.0 Unported License. 
+For details, see http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US
+Basically, this means that you are free to "share" and "remix" for 
+non-commerical purposes as you see fit, so long as you "attribute" me for my
+contribution. Derivatives can be distributed under the same or 
+similar license.*
+
+*This work comes with ABSOLUTELY NO WARRANTY or support.*
+
+***
+
+
+

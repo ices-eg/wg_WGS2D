@@ -37,6 +37,7 @@ library(ncdf4)
 library(RCMEMS)
 library(ClimateOperators)
 library(here)
+library(magrittr)
 
 #==========================================================================
 # Configure
@@ -54,9 +55,12 @@ CMEMS.cfgs <- readRDS("objects/CMEMS_cfgs.rds")
 vert.layers <- seq(min(spawn.depth),max(spawn.depth),by=5)
 
 #Setup grid description by copying the EN4 grid
-global.raster <- readRDS(here("objects/global_ROI.rds"))
+EN4.dat <- 
+  readRDS(here("objects/PredEng_MR_EN4_salinity_field.rds")) %>%
+  pull(field) %>%
+  extract2(1)
 griddes.fname <- "data/grid_descriptor.txt"
-writeLines(griddes(global.raster),griddes.fname)
+writeLines(griddes(extent(EN4.dat),grid.res),griddes.fname)
 
 #Rewrite all
 reprocess.all <- FALSE
