@@ -317,13 +317,13 @@ The research leading to these results has received funding from the European Uni
 
 ## References
 
-Good, S. A., M. J. Martin and N. A. Rayner. (2013). EN4: quality controlled ocean temperature and salinity profiles and monthly objective analyses with uncertainty estimates, Journal of Geophysical Research: Oceans, 118, 6704-6716, doi:10.1002/2013JC009067
+Good, S. A., M. J. Martin and N. A. Rayner. (2013). EN4: quality controlled ocean temperature and salinity profiles and monthly objective analyses with uncertainty estimates, Journal of Geophysical Research: Oceans, 118, 6704-6716, https://doi.org/10.1002/2013JC009067
 
-Hátún, H., Sandø, A. B., Drange, H., Hansen, B., and Valdimarsson, H. (2005). Influence of the Atlantic subpolar gyre on the thermohaline circulation. Science, 309(5742), 1841–4. doi:10.1126/science.1114777
+Hátún, H., Sandø, A. B., Drange, H., Hansen, B., and Valdimarsson, H. (2005). Influence of the Atlantic subpolar gyre on the thermohaline circulation. Science, 309(5742), 1841–4. https://doi.org/10.1126/science.1114777
 
-Hátún H., Payne, M.R., and Jacobsen, J.A. (2009) The North Atlantic subpolar gyre regulates the spawning distribution of blue whiting (*Micromesistius poutassou*). Canadian Journal of Fisheries and Aquatic Sciences 66: 759–770 doi:10.1139/F09-037
+Hátún H., Payne, M.R., and Jacobsen, J.A. (2009) The North Atlantic subpolar gyre regulates the spawning distribution of blue whiting (*Micromesistius poutassou*). Canadian Journal of Fisheries and Aquatic Sciences 66: 759–770 https://doi.org/10.1139/F09-037
 
-Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawning distribution of blue whiting (*Micromesistius poutassou*). Fisheries Oceanography, 27(6), 623–638. doi:10.1111/fog.12382
+Miesner, A.K., and Payne, M.R. (2018) Oceanographic variability shapes the spawning distribution of blue whiting (*Micromesistius poutassou*). Fisheries Oceanography, 27(6), 623–638. https://doi.org/10.1111/fog.12382
 
 Pointin, Fabien; Payne, Mark R (2014): A Resolution to the Blue Whiting (Micromesistius poutassou) Population Paradox? PLoS ONE, 9(9), e106237, https://doi.org/10.1371/journal.pone.0106237
 

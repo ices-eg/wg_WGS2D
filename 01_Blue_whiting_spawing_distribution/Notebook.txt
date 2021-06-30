@@ -1,0 +1,14 @@
+============================================
+Blue Whiting Spawning Distribution Forecasts
+============================================
+TODO:
+* 
+
+Next Actions
+* Update RCMEMS to use the -m motuclient as a module. Check that it runs.
+* Implement flattening of multiple oceanography sources 
+* Implement averaging of oceanography sources and merge into Forecast sheet as a time series and as a multipanel figure of the distribution of salinity
+
+2020.03.20
+* 
+*
