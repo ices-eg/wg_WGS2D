@@ -1,0 +1,157 @@
+---
+title: "North Sea Sandeel Recruitment Forecast Verification Report, 2020 cohort"
+output:
+  html_document: 
+    fig_caption: yes
+    outputfile: test.html
+  word_document: 
+    fig_caption: yes
+    reference_docx: "../../common/word-styles-reference.docx"
+---
+
+```{r setup, include="FALSE"}
+#Configure Knitr
+knitr::opts_chunk$set(
+  echo=FALSE,
+	error = FALSE,
+	message = FALSE,
+	warning = FALSE,
+	include = TRUE,
+	results = "markup",
+	fig.width = 10,
+	fig.height=14/25*10,
+  fig.align="center",
+  fig.path=file.path(".","figures","Forecast_sheet_"))
+
+# knitr::opts_knit$set(
+#   root.dir="..")
+
+library(tidyverse)
+library(here)
+library(rvest)
+library(magrittr)
+
+#Inline strings
+forecast.sheet <- "03-20201118"
+verification.date <- as.Date("2021-01-21")
+assessment.yr <- "2021"
+forecast.cohort <- 2020
+norm.fact <- 1e6
+portfolio.stocks <- c("SAN-area-1r","SAN-area-2r")
+#Configuration
+theme_set(theme_bw(base_size = 14))
+
+#TODO:
+# Add supplementary material with a time series of the recruitment levels per stock, and overall
+```
+
+Forecast verification report `r format(verification.date,"03v-%Y%m%d")`
+
+Issued `r format(verification.date,"%d-%m-%Y")`. 
+
+Prepared by Mark R. Payne and Christian Kiær, DTU Aqua, Copenhagen, Denmark. 
+
+This is the forecast verification report for the forecast of the `r forecast.cohort` cohort strength for North Sea sandeel stocks. The verification is based on the forecast sheet `r forecast.sheet`.
+
+```{r Fig_Forecast,fig.cap="**Figure 1. Recruitment forecast verification for 2020 cohort** *The predicted probability distribution of the 2020 year class for management area 1r, 2r and the combination of the two (portfolio) are plotted as a function of recruitment level. The probability of recruitment falling in each of the three terciles (high, medium or low recruitment) are given as percentiles Tercile thresholds are based on the values from the complete time series for a given forecast area and for the aggregated portfolio. Results from the stock assessment are shown as red points with 90% confidence intervals.*"}
+#'========================================================================
+# Setup block ####
+#'========================================================================
+# official recruitment numbers with 90% confidence
+ass.tbls <-
+  tibble(fname=dir(here("data"),
+                   pattern="_SAN_ICES_Log values.html",
+                   full.names = TRUE,
+                   recursive = TRUE)) %>%
+  mutate(area=basename(dirname(fname)),
+         html=map(fname, read_html),
+         dat=map(html,function(d) {
+           d %>%
+             html_table() %>%
+             extract2(1) %>%  #Gives a data.frame
+             select(1:4) %>%
+             extract(-c(1:2,4:6),) %>%
+             set_colnames(.[1,]) %>%
+             extract(-1,) %>%
+             as_tibble()
+         })) %>%
+  select(area,dat) %>%
+  unnest(dat) %>%
+  mutate(across(-area,as.numeric)) %>%
+  mutate(across(c(Recruitment,High,Low),log))
+
+#Get the recruitment of interest
+ass.rec <-
+  ass.tbls %>%
+  filter(Year==forecast.cohort, 
+         area %in% portfolio.stocks) 
+
+#Propigating the erros in the portfolios is a bit tricky as they are
+#log-normally distributed and we don't have the standard deviations. 
+#Here I infer the standard deviations first 
+portfolio.draws <-
+  ass.rec %>%
+  mutate(log.sd=(High-Low)/2/1.96,
+         draws=map2(Recruitment,log.sd, ~ exp(rnorm(1000,.x,.y)))) %>%
+  pull(draws)%>%
+  do.call(what=cbind) %>%
+  apply(1,sum)
+
+plt.dat <- 
+  tibble(area="Portfolio",
+         Recruitment=log(median(portfolio.draws)),
+         High=log(quantile(portfolio.draws,0.975)),
+         Low=log(quantile(portfolio.draws,0.025))) %>%
+  bind_rows(ass.rec) %>%
+  mutate(model=fct_recode(area,
+                          "Area 1r"="SAN-area-1r",
+                          "Area 2r"="SAN-area-2r"))
+
+#Load previous forecast figure
+#forecast.fig <- readRDS(here("objects/Forecast_plot.rds"))
+load(here("objects/Forecast_plot.rData"))
+
+forecast.plot +
+  geom_point(data=plt.dat,aes(y=0.85,x=Recruitment,col=assessment.yr))+
+  geom_errorbarh(data=plt.dat,
+                 aes(y=0.85,xmin=Low,xmax=High,col=assessment.yr),
+                 height=0.1)+
+  guides(colour=guide_legend("Assessment"),
+         fill=guide_legend(order=1))+
+  coord_flip(ylim = c(0,1),xlim= c(13,21),expand=FALSE)
+
+```
+## Forecast As Issued
+*The 2020 North Sea sandeel recruitment forecast covers two (1r, 2r) of the four assessed sandeel stocks in the North Sea, together with the combined recruitment across these two stocks. Forecasts for all individual stocks suggest a low probability of a strong year class, with a high probability  of these year classes being in the lower third of the historically observed recruitment (Figure 1). 
+
+The portfolio forecast (for recruitment summed across stocks 1r and 2r) indicates a low probability of a strong overall year class. *
+
+## Conclusions
+There is good agreement between the forecast and assessed recruitment in Area 1r. The most likely values forecast for this stock agree well with the assessment results, which bracket the peak of the distribution. The  recruitment tercile was also predicted correctly.
+
+The forecast for Area 2r performed less well: a "Low" recruitment was forecast, while a "Medium" recruitment was assessed. 
+
+The portfolio forecast agrees well with the assessed recruitment, both in terms of the expected value and the tercile.
+
+## For More Information
+
+For more information, contact Mark R. Payne, DTU-Aqua, http://www.staff.dtu.dk/mpay (Twitter @MarkPayneAtWork). The latest version of this and other forecasts can be found on the website [fishforecasts.dtu.dk](http://fishforecasts.dtu.dk), including the original versions of this forecast as issued. Code used to generate this forecast is available from the WGS2D GitHub repository, [https://github.com/ices-eg/wg_WGS2D](https://github.com/ices-eg/wg_WGS2D) in the directory "03_Sandeel_Recruitment_Forecast".
+
+
+## License Information
+
+This work by Mark R. Payne is licensed under a  Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License. For details, see http://creativecommons.org/licenses/by-nc-sa/3.0/deed.en_US Basically, this means that you are free to "share" and "remix" for non-commercial purposes as you see fit, so long as you "attribute" me for my contribution. Derivatives can be distributed under the same or similar license.
+
+This work is an experimental forecast product and comes with ABSOLUTELY NO WARRANTY or support. Any use of these forecasts is done at the risk of the user.
+
+## Acknowledgements
+The research leading to these results has received funding from the European Union Horizon 2020 research and innovation programme under grant agreement number 727852 (Blue-Action).
+
+![](`r here("../common/blue-action-logo.png")` )
+
+
+
+
+
+
+
